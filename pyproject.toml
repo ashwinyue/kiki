@@ -1,0 +1,106 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kiki-agent"
+version = "0.1.0"
+description = "Enterprise-grade Agent development framework"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [
+    { name = "Kiki Team", email = "hello@kiki.dev" }
+]
+
+dependencies = [
+    # Web Framework
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    # LangGraph & LangChain
+    "langgraph>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-openai>=0.2.0",
+    # Database
+    "sqlmodel>=0.0.24",
+    "asyncpg>=0.30.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
+    # Observability
+    "structlog>=25.1.0",
+    "langfuse>=2.50.0",
+    "prometheus-client>=0.21.0",
+    # Auth
+    "python-jose[cryptography]>=3.4.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.18",
+    # Utils
+    "python-dotenv>=1.0.0",
+    "redis>=5.0.0",
+    "hiredis>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+all = [
+    "kiki-agent[dev]",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "B", "C4", "UP", "ASYNC", "S"]
+ignore = ["E501", "S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
