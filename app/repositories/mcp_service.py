@@ -32,7 +32,7 @@ class MCPServiceRepository(BaseRepository[MCPService]):
         """列出启用的 MCP 服务（可按租户过滤）"""
         try:
             statement = select(MCPService).where(
-                MCPService.enabled == True,
+                MCPService.enabled,
                 MCPService.deleted_at.is_(None),
             )
             if tenant_id is not None:
@@ -60,7 +60,7 @@ class MCPServiceRepository(BaseRepository[MCPService]):
                 MCPService.deleted_at.is_(None),
             )
             if not include_disabled:
-                statement = statement.where(MCPService.enabled == True)
+                statement = statement.where(MCPService.enabled)
             result = await self.session.execute(statement)
             return list(result.scalars().all())
         except Exception as e:

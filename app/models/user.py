@@ -4,9 +4,13 @@
 """
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean
-from sqlmodel import Column, Field, SQLModel
+from sqlmodel import Column, Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from app.models.thread import Thread
 
 
 def hash_password(password: str) -> str:
@@ -44,6 +48,9 @@ class User(UserBase, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None)
+
+    # 关系
+    threads: list["Thread"] = Relationship(back_populates="user")
 
     def verify_password(self, password: str) -> bool:
         """验证密码"""

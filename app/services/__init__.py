@@ -13,6 +13,15 @@ __all__ = [
     "get_api_key_management_service",
     "McpServiceService",
     "get_mcp_service_service",
+    "WebSearchService",
+    "get_web_search_service",
+    "ElasticsearchService",
+    "KnowledgeCloner",
+    "CopyProgress",
+    "CopyTaskStatus",
+    "create_copy_task",
+    "get_copy_progress",
+    "execute_copy_task",
 ]
 
 
@@ -49,5 +58,40 @@ def __getattr__(name: str):
         if name == "McpServiceService":
             return McpServiceService
         return get_mcp_service_service
+
+    if name == "WebSearchService" or name == "get_web_search_service":
+        from app.services.web_search import WebSearchService, get_web_search_service
+        if name == "WebSearchService":
+            return WebSearchService
+        return get_web_search_service
+
+    if name == "ElasticsearchService":
+        from app.services.elasticsearch_service import ElasticsearchService
+        return ElasticsearchService
+
+    if name in (
+        "KnowledgeCloner",
+        "CopyProgress",
+        "CopyTaskStatus",
+        "create_copy_task",
+        "get_copy_progress",
+        "execute_copy_task",
+    ):
+        from app.services.knowledge_clone import (
+            CopyProgress,
+            CopyTaskStatus,
+            KnowledgeCloner,
+            create_copy_task,
+            execute_copy_task,
+            get_copy_progress,
+        )
+        return {
+            "KnowledgeCloner": KnowledgeCloner,
+            "CopyProgress": CopyProgress,
+            "CopyTaskStatus": CopyTaskStatus,
+            "create_copy_task": create_copy_task,
+            "get_copy_progress": get_copy_progress,
+            "execute_copy_task": execute_copy_task,
+        }[name]
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -4,10 +4,12 @@
 使用 LangChain 内置的 with_retry 方法替代手动重试。
 """
 
+from collections.abc import AsyncIterator
 from typing import Any, TypeVar
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
+from langchain_core.outputs import LLMResult
 from openai import APIError, APITimeoutError, OpenAIError, RateLimitError
 from pydantic import BaseModel
 
@@ -426,6 +428,150 @@ class LLMService:
             if llm is None:
                 raise RuntimeError(f"无法创建 LLM: {e}") from e
             return llm
+
+    async def chat(
+        self,
+        messages: list[dict[str, str] | BaseMessage],
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        config: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """聊天接口（兼容 ChatPipeline）
+
+        Args:
+            messages: 消息列表（dict 或 BaseMessage）
+            model: 模型名称（可选）
+            temperature: 温度参数
+            max_tokens: 最大 token 数
+            config: RunnableConfig（包含 callbacks）
+            **kwargs: 其他参数
+
+        Returns:
+            包含 content 的响应字典
+
+        Examples:
+            ```python
+            from app.agent.callbacks import KikiCallbackHandler
+
+            handler = KikiCallbackHandler(session_id="session-123")
+            response = await llm_service.chat(
+                messages=[{"role": "user", "content": "Hello"}],
+                config={"callbacks": [handler]},
+            )
+            ```
+        """
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        # 转换消息格式
+        lc_messages: list[BaseMessage] = []
+        for msg in messages:
+            if isinstance(msg, BaseMessage):
+                lc_messages.append(msg)
+            elif isinstance(msg, dict):
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if role == "system":
+                    lc_messages.append(SystemMessage(content=content))
+                else:
+                    lc_messages.append(HumanMessage(content=content))
+
+        # 准备调用参数
+        invoke_kwargs: dict[str, Any] = {
+            "temperature": temperature,
+            **kwargs,
+        }
+        if max_tokens is not None:
+            invoke_kwargs["max_tokens"] = max_tokens
+
+        # 添加 config（包含 callbacks）
+        if config:
+            invoke_kwargs["config"] = config
+
+        # 获取 LLM 并调用
+        llm = self.get_llm_with_retry()
+        if model:
+            llm = LLMRegistry.get(model)
+            llm = self._apply_retry(llm)
+
+        if llm is None:
+            raise RuntimeError("LLM 未初始化")
+
+        response: BaseMessage = await llm.ainvoke(lc_messages, **invoke_kwargs)
+
+        return {"content": str(response.content), "response": response}
+
+    async def chat_stream(
+        self,
+        messages: list[dict[str, str] | BaseMessage],
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        config: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        """流式聊天接口（兼容 ChatPipeline）
+
+        Args:
+            messages: 消息列表（dict 或 BaseMessage）
+            model: 模型名称（可选）
+            temperature: 温度参数
+            max_tokens: 最大 token 数
+            config: RunnableConfig（包含 callbacks）
+            **kwargs: 其他参数
+
+        Yields:
+            文本片段
+
+        Examples:
+            ```python
+            async for chunk in llm_service.chat_stream(
+                messages=[{"role": "user", "content": "Hello"}],
+                config={"callbacks": [handler]},
+            ):
+                print(chunk, end="")
+            ```
+        """
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        # 转换消息格式
+        lc_messages: list[BaseMessage] = []
+        for msg in messages:
+            if isinstance(msg, BaseMessage):
+                lc_messages.append(msg)
+            elif isinstance(msg, dict):
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if role == "system":
+                    lc_messages.append(SystemMessage(content=content))
+                else:
+                    lc_messages.append(HumanMessage(content=content))
+
+        # 准备调用参数
+        invoke_kwargs: dict[str, Any] = {
+            "temperature": temperature,
+            **kwargs,
+        }
+        if max_tokens is not None:
+            invoke_kwargs["max_tokens"] = max_tokens
+
+        # 添加 config（包含 callbacks）
+        if config:
+            invoke_kwargs["config"] = config
+
+        # 获取 LLM 并流式调用
+        llm = self.get_llm_with_retry()
+        if model:
+            llm = LLMRegistry.get(model)
+            llm = self._apply_retry(llm)
+
+        if llm is None:
+            raise RuntimeError("LLM 未初始化")
+
+        async for chunk in llm.astream(lc_messages, **invoke_kwargs):
+            if hasattr(chunk, "content") and chunk.content:
+                yield str(chunk.content)
 
 
 # 全局 LLM 服务实例

@@ -231,6 +231,47 @@ class TenantService:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
+    async def search_tenants(
+        self,
+        *,
+        keyword: str | None = None,
+        status: str | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> tuple[list[Tenant], int]:
+        """搜索租户
+
+        Args:
+            keyword: 搜索关键词（名称、描述、业务类型）
+            status: 状态筛选
+            page: 页码
+            size: 每页数量
+
+        Returns:
+            (租户列表, 总数)
+        """
+        from app.repositories.base import PaginationParams
+        from app.repositories.tenant import TenantRepository
+
+        repository = TenantRepository(self.session)
+        params = PaginationParams(page=page, size=size)
+
+        result = await repository.search(
+            keyword=keyword,
+            status=status,
+            params=params,
+        )
+
+        logger.info(
+            "tenant_service_search_success",
+            keyword=keyword,
+            status=status,
+            total=result.total,
+            page=params.page,
+        )
+
+        return result.items, result.total
+
 
 # 解决循环导入
 if __name__ == "__main__":

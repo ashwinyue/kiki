@@ -32,9 +32,10 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph.state import CompiledStateGraph
 
-from app.agent.graphs import BaseGraph, ChatGraph
-from app.agent.graphs.react import ReactAgent, create_react_agent
+from app.agent.graph import compile_chat_graph
+from app.agent.graph.react import ReactAgent, create_react_agent
 from app.agent.tools.interceptor import wrap_tools_with_interceptor
 from app.config.settings import get_settings
 from app.llm import LLMService, get_llm_service
@@ -155,7 +156,7 @@ class AgentFactory:
         checkpointer: BaseCheckpointSaver | None = None,
         config: AgentConfig | None = None,
         **kwargs,
-    ) -> BaseGraph | Any:
+    ) -> CompiledStateGraph | ReactAgent:
         """创建 Agent 实例
 
         Args:
@@ -268,7 +269,7 @@ class AgentFactory:
         config: AgentConfig,
         checkpointer: BaseCheckpointSaver | None = None,
         **kwargs,
-    ) -> ChatGraph:
+    ) -> CompiledStateGraph:
         """创建基础对话 Agent
 
         Args:
@@ -277,14 +278,13 @@ class AgentFactory:
             checkpointer: 检查点保存器
 
         Returns:
-            ChatGraph 实例
+            编译后的 LangGraph
         """
-        graph = ChatGraph(
+        return compile_chat_graph(
             llm_service=llm_service,
             system_prompt=config.system_prompt,
+            checkpointer=checkpointer,
         )
-        graph.compile(checkpointer=checkpointer)
-        return graph
 
     @classmethod
     def _create_react_agent(
@@ -330,7 +330,7 @@ def create_agent(
     system_prompt: str | None = None,
     config: AgentConfig | None = None,
     **kwargs,
-) -> BaseGraph | Any:
+) -> CompiledStateGraph | ReactAgent:
     """创建 Agent 的便捷函数
 
     Args:

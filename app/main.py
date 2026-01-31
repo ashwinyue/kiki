@@ -22,13 +22,13 @@ from starlette.requests import Request as StarletteRequest
 from app.config.settings import get_settings
 from app.config.errors import classify_error, get_user_friendly_message
 from app.rate_limit.limiter import RateLimit, limiter, rate_limit_exceeded_handler
-from app.api.middleware import (
+from app.middleware import (
     MaxRequestSizeMiddleware,
     ObservabilityMiddleware,
     RequestContextMiddleware,
     SecurityHeadersMiddleware,
+    TenantMiddleware,
 )
-from app.auth.middleware import TenantMiddleware
 from app.observability.logging import configure_logging, get_logger
 
 # 获取配置

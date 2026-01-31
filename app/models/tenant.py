@@ -33,6 +33,9 @@ class Tenant(TenantBase, table=True):
     context_config: Any | None = Field(default=None, sa_column=Column(JSONB))
     conversation_config: Any | None = Field(default=None, sa_column=Column(JSONB))
     web_search_config: Any | None = Field(default=None, sa_column=Column(JSONB))
+    kv_config: Any | None = Field(
+        default=None, sa_column=Column(JSONB), description="通用 KV 配置存储"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None)

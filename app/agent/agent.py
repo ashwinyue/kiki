@@ -1,6 +1,7 @@
 """Agent 管理类
 
 提供完整的 LangGraph Agent 管理功能，包括图创建、响应获取、流式处理等。
+使用 LangGraph 原生的流式处理接口。
 """
 
 from __future__ import annotations
@@ -30,9 +31,10 @@ except (ImportError, OSError):
     AsyncConnectionPool = None  # type: ignore
     _psycopg_pool_available = False
 
-from app.agent.graphs import ChatGraph
+from app.agent.graph import compile_chat_graph
 from app.agent.state import create_state_from_input
 from app.agent.memory.context import get_context_manager
+from app.agent.streaming import stream_events_from_graph, stream_tokens_from_graph
 from app.config.settings import get_settings
 from app.llm import LLMService, get_llm_service
 from app.observability.logging import get_logger
@@ -69,7 +71,7 @@ class LangGraphAgent:
         self._llm_service = llm_service or get_llm_service()
         self._system_prompt = system_prompt or self._default_system_prompt()
         self._checkpointer = checkpointer
-        self._graph: ChatGraph | None = None
+        self._graph: CompiledStateGraph | None = None
         self._connection_pool: AsyncConnectionPool | None = None
 
         logger.info(
@@ -128,16 +130,23 @@ class LangGraphAgent:
             logger.warning("postgres_checkpointer_init_failed", error=str(e))
             return None
 
-    def _get_graph(self) -> ChatGraph:
-        """获取或创建图
+    def _get_graph(
+        self,
+        checkpointer: BaseCheckpointSaver | None = None,
+    ) -> CompiledStateGraph:
+        """获取或创建编译后的图
+
+        Args:
+            checkpointer: 可选的检查点保存器（如果提供且不同，会重新编译图）
 
         Returns:
-            ChatGraph 实例
+            CompiledStateGraph 实例
         """
-        if self._graph is None:
-            self._graph = ChatGraph(
-                llm_service=self._llm_service,
+        if self._graph is None or (checkpointer and checkpointer is not self._checkpointer):
+            self._checkpointer = checkpointer or self._checkpointer
+            self._graph = compile_chat_graph(
                 system_prompt=self._system_prompt,
+                checkpointer=self._checkpointer,
             )
         return self._graph
 
@@ -201,10 +210,9 @@ class LangGraphAgent:
             callbacks=callbacks or None,
         )
 
-        # 获取检查点
+        # 获取检查点并重新编译图（如果需要）
         checkpointer = await self._get_postgres_checkpointer()
-        if checkpointer:
-            graph.compile(checkpointer=checkpointer)
+        graph = self._get_graph(checkpointer)
 
         # 调用图
         logger.info("agent_invoke_start", session_id=session_id, user_id=user_id)
@@ -219,11 +227,8 @@ class LangGraphAgent:
 
     async def get_compiled_graph(self) -> CompiledStateGraph:
         """获取已编译图（优先使用 PostgreSQL 检查点）"""
-        graph = self._get_graph()
         checkpointer = await self._get_postgres_checkpointer()
-        if checkpointer:
-            return graph.compile(checkpointer=checkpointer)
-        return graph.compile()
+        return self._get_graph(checkpointer)
 
     async def persist_interaction(
         self,
@@ -248,9 +253,9 @@ class LangGraphAgent:
 
         # 同步写入数据库消息表（最佳努力）
         try:
+            from app.infra.database import session_scope
             from app.models.database import MessageCreate
             from app.repositories.message import MessageRepository
-            from app.infra.database import session_scope
 
             async with session_scope() as session:
                 repo = MessageRepository(session)
@@ -280,6 +285,7 @@ class LangGraphAgent:
         session_id: str,
         user_id: str | None = None,
         tenant_id: int | None = None,
+        stream_mode: str = "tokens",
     ) -> AsyncIterator[str]:
         """获取流式响应
 
@@ -287,6 +293,8 @@ class LangGraphAgent:
             message: 用户消息
             session_id: 会话 ID
             user_id: 用户 ID
+            tenant_id: 租户 ID
+            stream_mode: 流模式 (tokens, events, updates)
 
         Yields:
             响应内容片段
@@ -326,18 +334,35 @@ class LangGraphAgent:
             callbacks=callbacks or None,
         )
 
-        # 获取检查点
+        # 获取检查点并重新编译图（如果需要）
         checkpointer = await self._get_postgres_checkpointer()
-        if checkpointer:
-            graph.compile(checkpointer=checkpointer)
+        graph = self._get_graph(checkpointer)
 
-        # 流式调用
-        logger.info("agent_stream_start", session_id=session_id)
+        # 流式调用（使用新的流式处理器）
+        logger.info("agent_stream_start", session_id=session_id, stream_mode=stream_mode)
         collected: list[str] = []
-        async for chunk in graph.astream(input_data, config, stream_mode="messages"):
-            if hasattr(chunk, "content") and chunk.content:
-                collected.append(chunk.content)
-                yield chunk.content
+
+        if stream_mode == "tokens":
+            # Token 级别流式输出
+            async for token in stream_tokens_from_graph(graph, input_data, config):
+                collected.append(token)
+                yield token
+        elif stream_mode == "events":
+            # 事件级别流式输出（包含工具调用等）
+            from app.agent.streaming import StreamEvent
+
+            async for event in stream_events_from_graph(graph, input_data, config):
+                if event.type == StreamEvent.TOKEN:
+                    collected.append(event.content)
+                    yield event.content
+                # 其他事件类型可以根据需要处理
+        else:
+            # 默认使用 messages 模式
+            async for chunk in graph.astream(input_data, config, stream_mode="messages"):
+                if hasattr(chunk, "content") and chunk.content:
+                    collected.append(str(chunk.content))
+                    yield str(chunk.content)
+
         if collected:
             await self.persist_interaction(session_id, message, "".join(collected))
         logger.info("agent_stream_complete", session_id=session_id)
@@ -372,14 +397,15 @@ class LangGraphAgent:
 
         # 尝试从数据库读取（便于会话持久化）
         try:
-            from app.repositories.message import MessageRepository
-            from app.infra.database import session_scope
             from langchain_core.messages import (
                 AIMessage,
                 HumanMessage,
                 SystemMessage,
                 ToolMessage,
             )
+
+            from app.infra.database import session_scope
+            from app.repositories.message import MessageRepository
 
             role_map = {
                 "user": HumanMessage,
@@ -405,16 +431,13 @@ class LangGraphAgent:
                 error=str(e),
             )
 
-        graph = self._get_graph()
+        # 获取检查点并重新编译图（如果需要）
+        checkpointer = await self._get_postgres_checkpointer()
+        graph = self._get_graph(checkpointer)
 
         config = RunnableConfig(
             configurable={"thread_id": session_id},
         )
-
-        # 获取检查点
-        checkpointer = await self._get_postgres_checkpointer()
-        if checkpointer:
-            graph.compile(checkpointer=checkpointer)
 
         state = await graph.aget_state(config)
 
@@ -443,8 +466,8 @@ class LangGraphAgent:
 
             # 清理数据库消息（最佳努力）
             try:
-                from app.repositories.message import MessageRepository
                 from app.infra.database import session_scope
+                from app.repositories.message import MessageRepository
 
                 async with session_scope() as session:
                     repo = MessageRepository(session)

@@ -4,7 +4,6 @@
 """
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +13,6 @@ from app.models.api_key import (
     ApiKeyCreate,
     ApiKeyStatus,
     ApiKeyType,
-    ApiKeyUpdate,
 )
 from app.repositories.base import BaseRepository
 
@@ -43,7 +41,6 @@ class ApiKeyRepository(BaseRepository[ApiKey]):
         Returns:
             创建的 API Key
         """
-        from app.auth.api_key import ApiKeyService
 
         # 计算过期时间
         expires_at = None

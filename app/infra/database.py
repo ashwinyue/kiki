@@ -17,13 +17,6 @@ from sqlmodel import SQLModel, create_engine
 
 from app.config.settings import get_settings
 from app.observability.logging import get_logger
-from app.repositories import (
-    MessageRepository,
-    MCPServiceRepository,
-    SessionRepository,
-    ThreadRepository,
-    UserRepository,
-)
 
 logger = get_logger(__name__)
 
@@ -168,67 +161,10 @@ async def transaction(
             raise
 
 
-# ============== 仓储工厂方法 ==============
+# ============== 仓储工厂方法 (已移除，避免循环导入) ==============
 
-
-def user_repository(session: AsyncSession) -> UserRepository:
-    """创建用户仓储
-
-    Args:
-        session: 数据库会话
-
-    Returns:
-        UserRepository 实例
-    """
-    return UserRepository(session)
-
-
-def session_repository(session: AsyncSession) -> SessionRepository:
-    """创建会话仓储
-
-    Args:
-        session: 数据库会话
-
-    Returns:
-        SessionRepository 实例
-    """
-    return SessionRepository(session)
-
-
-def thread_repository(session: AsyncSession) -> ThreadRepository:
-    """创建线程仓储
-
-    Args:
-        session: 数据库会话
-
-    Returns:
-        ThreadRepository 实例
-    """
-    return ThreadRepository(session)
-
-
-def mcp_service_repository(session: AsyncSession) -> MCPServiceRepository:
-    """创建 MCP 服务仓储
-
-    Args:
-        session: 数据库会话
-
-    Returns:
-        MCPServiceRepository 实例
-    """
-    return MCPServiceRepository(session)
-
-
-def message_repository(session: AsyncSession) -> MessageRepository:
-    """创建消息仓储
-
-    Args:
-        session: 数据库会话
-
-    Returns:
-        MessageRepository 实例
-    """
-    return MessageRepository(session)
+# 这些工厂方法已移到各自的 Repository 类中
+# 直接使用: UserRepository(session) 替代 user_repository(session)
 
 
 # ============== 健康检查 ==============

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request as StarletteRequest
 
 from app.rate_limit.limiter import RateLimit, limiter
-from app.auth.middleware import RequiredTenantIdDep
+from app.middleware import RequiredTenantIdDep
 from app.models.agent import MCPServiceCreate, MCPServiceUpdate
 from app.observability.logging import get_logger
 from app.infra.database import get_session

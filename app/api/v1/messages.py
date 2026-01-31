@@ -9,13 +9,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request as StarletteRequest
 
-from app.auth.middleware import TenantIdDep
+from app.middleware import TenantIdDep
 from app.infra.database import get_session
 from app.models.database import Message
 from app.observability.logging import get_logger
 from app.rate_limit.limiter import RateLimit, limiter
 from app.schemas.message import (
     MessageListResponse,
+    MessageLoadRequest,
+    MessageLoadResponse,
     MessageRegenerateRequest,
     MessageResponse,
     MessageSearchResponse,
@@ -98,7 +100,7 @@ async def list_messages(
 async def get_message(
     session: Annotated[AsyncSession, Depends(get_session)],
     request: StarletteRequest,
-    message_id: int,
+    message_id: str,
     tenant_id: TenantIdDep = None,
 ) -> MessageResponse:
     """获取消息详情"""
@@ -124,7 +126,7 @@ async def get_message(
 async def update_message(
     session: Annotated[AsyncSession, Depends(get_session)],
     request: StarletteRequest,
-    message_id: int,
+    message_id: str,
     data: MessageUpdate,
     regenerate: MessageRegenerateRequest | None = None,
     tenant_id: TenantIdDep = None,
@@ -154,7 +156,7 @@ async def update_message(
 async def delete_message(
     session: Annotated[AsyncSession, Depends(get_session)],
     request: StarletteRequest,
-    message_id: int,
+    message_id: str,
     tenant_id: TenantIdDep = None,
 ) -> None:
     """删除消息"""
@@ -208,4 +210,49 @@ async def search_messages(
         items=items,
         total=len(items),
         query=q,
+    )
+
+
+@router.get(
+    "/{session_id}/load",
+    response_model=MessageLoadResponse,
+    summary="分页加载消息",
+    description="加载会话的消息历史，支持向上滚动加载更早的消息",
+)
+@limiter.limit(RateLimit.API)
+async def load_messages(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    request: StarletteRequest,
+    session_id: str,
+    tenant_id: TenantIdDep = None,
+    message_id: str | None = Query(None, description="锚点消息 ID，加载此消息之前的消息"),
+    limit: int = Query(20, ge=1, le=100, description="加载数量限制"),
+) -> MessageLoadResponse:
+    """分页加载消息
+
+    对齐 WeKnora 的 /messages/{session_id}/load API。
+
+    用法：
+    - 首次加载：不传 message_id，获取最新的消息
+    - 向上滚动：传入当前最早的消息 ID，加载更早的消息
+    """
+    user_id = getattr(request.state, "user_id", None)
+
+    load_request = MessageLoadRequest(
+        message_id=message_id,
+        limit=limit,
+    )
+
+    service = MessageService(session)
+    messages, has_more = await service.load_messages(
+        session_id,
+        load_request,
+        user_id=int(user_id) if user_id else None,
+        tenant_id=tenant_id,
+    )
+
+    items = [_convert_to_response(msg) for msg in messages]
+    return MessageLoadResponse(
+        items=items,
+        has_more=has_more,
     )

@@ -178,19 +178,16 @@ if user.verify_password("input_password"):
 ### Router Agent（路由模式）
 
 ```python
-from app.core.agent import (
-    RouterAgent,
-    create_multi_agent_system,
-    AgentGraph,
-)
+from app.agent.multi_agent import RouterAgent, create_multi_agent_system
+from app.agent.graph import compile_chat_graph
 
 # 创建专业 Agent
-sales_agent = AgentGraph(
+sales_agent = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是销售专家...",
 )
 
-support_agent = AgentGraph(
+support_agent = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是客服专家...",
 )
@@ -215,12 +212,12 @@ response = await router.ainvoke(
 ### Supervisor Agent（监督模式）
 
 ```python
-from app.core.agent import SupervisorAgent
+from app.agent.multi_agent import SupervisorAgent
 
 # 创建 Worker Agent
-researcher = AgentGraph(llm_service, system_prompt="研究员...")
-writer = AgentGraph(llm_service, system_prompt="写手...")
-reviewer = AgentGraph(llm_service, system_prompt="审核员...")
+researcher = compile_chat_graph(llm_service, system_prompt="研究员...")
+writer = compile_chat_graph(llm_service, system_prompt="写手...")
+reviewer = compile_chat_graph(llm_service, system_prompt="审核员...")
 
 # 创建监督系统
 supervisor = SupervisorAgent(
@@ -238,7 +235,7 @@ graph = supervisor.graph.compile()
 ### Handoff Agent（Swarm 模式）
 
 ```python
-from app.core.agent import HandoffAgent, create_swarm
+from app.agent.multi_agent import HandoffAgent, create_swarm
 
 # 创建可切换 Agent
 alice = HandoffAgent(

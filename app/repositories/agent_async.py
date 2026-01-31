@@ -1,18 +1,28 @@
 """Agent 异步仓储模块
 
 提供 Agent 的异步数据访问层，兼容 BaseRepository 模式。
+对齐 WeKnora99 CustomAgent 模型。
 """
 
+from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import SQLModel
 
-from app.models.agent import Agent, AgentCreate, AgentExecution, AgentStatus, AgentType, AgentUpdate
+from app.models.custom_agent import CustomAgent
 from app.observability.logging import get_logger
 from app.repositories.base import BaseRepository, PaginatedResult, PaginationParams
 
 logger = get_logger(__name__)
+
+# 向后兼容别名
+Agent = CustomAgent
+
+
+# ============== 仓储 ==============
 
 
 class AgentRepositoryAsync(BaseRepository[Agent]):
@@ -29,10 +39,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
         """
         super().__init__(Agent, session)
 
-    async def create_with_tools(
-        self,
-        data: AgentCreate,
-    ) -> Agent:
+    async def create_with_tools(self, data: dict[str, Any]) -> Agent:
         """创建 Agent
 
         Args:
@@ -41,7 +48,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
         Returns:
             创建的 Agent
         """
-        agent = Agent(**data.model_dump())
+        agent = Agent(**data)
         self.session.add(agent)
         await self.session.flush()
 
@@ -68,18 +75,15 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
             logger.error("agent_repository_get_by_name_failed", name=name, error=str(e))
             return None
 
-    async def list_by_type_and_status(
+    async def list_by_tenant(
         self,
-        agent_type: AgentType | None = None,
-        status: AgentStatus | None = None,
-        params: PaginationParams | None = None,
         tenant_id: int | None = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[Agent]:
-        """根据类型和状态分页列出 Agent
+        """按租户分页列出 Agent
 
         Args:
-            agent_type: 筛选类型
-            status: 筛选状态
+            tenant_id: 租户 ID
             params: 分页参数
 
         Returns:
@@ -90,13 +94,9 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
 
             if tenant_id is not None:
                 statement = statement.where(Agent.tenant_id == tenant_id)
-            if agent_type:
-                statement = statement.where(Agent.agent_type == agent_type)
-            if status:
-                statement = statement.where(Agent.status == status)
 
             # 排除已删除的
-            statement = statement.where(Agent.status != AgentStatus.DELETED)
+            statement = statement.where(Agent.deleted_at.is_(None))
 
             # 按创建时间倒序
             statement = statement.order_by(desc(Agent.created_at))
@@ -121,18 +121,13 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
             return PaginatedResult.create(items, total, params)
 
         except Exception as e:
-            logger.error(
-                "agent_repository_list_failed",
-                agent_type=agent_type,
-                status=status,
-                error=str(e),
-            )
+            logger.error("agent_repository_list_failed", tenant_id=tenant_id, error=str(e))
             return PaginatedResult.create([], 0, params or PaginationParams())
 
     async def update_agent(
         self,
-        agent_id: int,
-        data: AgentUpdate,
+        agent_id: str,
+        data: dict[str, Any],
     ) -> Agent | None:
         """更新 Agent
 
@@ -149,8 +144,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
                 return None
 
             # 更新字段
-            update_data = data.model_dump(exclude_unset=True)
-            for field, value in update_data.items():
+            for field, value in data.items():
                 if hasattr(agent, field):
                     setattr(agent, field, value)
 
@@ -165,7 +159,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
             logger.error("agent_repository_update_failed", agent_id=agent_id, error=str(e))
             raise
 
-    async def soft_delete(self, agent_id: int) -> bool:
+    async def soft_delete(self, agent_id: str) -> bool:
         """软删除 Agent
 
         Args:
@@ -179,7 +173,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
             if agent is None:
                 return False
 
-            agent.status = AgentStatus.DELETED
+            agent.deleted_at = datetime.now(UTC)
             await self.session.commit()
 
             logger.info("agent_soft_deleted", agent_id=agent_id)
@@ -190,138 +184,111 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
             logger.error("agent_repository_delete_failed", agent_id=agent_id, error=str(e))
             return False
 
-    async def get_active_count(self) -> int:
-        """获取活跃 Agent 数量
+    async def copy(
+        self,
+        source_agent_id: str,
+        new_name: str,
+        new_description: str | None = None,
+        new_config: dict[str, Any] | None = None,
+        created_by: str | None = None,
+    ) -> Agent | None:
+        """复制 Agent
+
+        Args:
+            source_agent_id: 源 Agent ID
+            new_name: 新 Agent 名称
+            new_description: 新 Agent 描述
+            new_config: 新 Agent 配置（不传则复制源配置）
+            created_by: 创建人 ID
 
         Returns:
-            活跃 Agent 数量
+            新 Agent 实例，源 Agent 不存在返回 None
         """
         try:
+            # 获取源 Agent
+            source_agent = await self.get(source_agent_id)
+            if source_agent is None:
+                logger.warning("source_agent_not_found", agent_id=source_agent_id)
+                return None
+
+            # 构建新 Agent 数据
+            agent_data = {
+                "id": str(uuid4()),
+                "name": new_name,
+                "description": new_description if new_description is not None else source_agent.description,
+                "tenant_id": source_agent.tenant_id,
+                "created_by": created_by,
+                "config": new_config if new_config is not None else source_agent.config,
+                "avatar": source_agent.avatar,
+                "is_builtin": False,  # 复制的 Agent 不是内置的
+            }
+
+            # 创建新 Agent
+            new_agent = Agent(**agent_data)
+            self.session.add(new_agent)
+            await self.session.flush()
+
+            await self.session.commit()
+            await self.session.refresh(new_agent)
+
+            logger.info(
+                "agent_copied",
+                source_agent_id=source_agent_id,
+                new_agent_id=new_agent.id,
+                new_name=new_name,
+            )
+            return new_agent
+
+        except Exception as e:
+            await self.session.rollback()
+            logger.error("agent_repository_copy_failed", source_agent_id=source_agent_id, error=str(e))
+            raise
+
+    async def list_by_tenant_with_tools(
+        self,
+        tenant_id: int | None = None,
+        params: PaginationParams | None = None,
+    ) -> PaginatedResult[Agent]:
+        """按租户分页列出 Agent（包含工具关联）
+
+        Args:
+            tenant_id: 租户 ID
+            params: 分页参数
+
+        Returns:
+            分页结果
+        """
+        try:
+            statement = select(Agent)
+
+            if tenant_id is not None:
+                statement = statement.where(Agent.tenant_id == tenant_id)
+
+            # 排除已删除的
+            statement = statement.where(Agent.deleted_at.is_(None))
+
+            # 按创建时间倒序
+            statement = statement.order_by(desc(Agent.created_at))
+
+            # 获取总数
             from sqlalchemy import func
 
-            statement = select(func.count()).select_from(Agent).where(
-                Agent.status == AgentStatus.ACTIVE
-            )
-            result = await self.session.execute(statement)
-            return result.scalar() or 0
+            count_stmt = select(func.count()).select_from(statement.subquery())
+            total_result = await self.session.execute(count_stmt)
+            total = total_result.scalar() or 0
+
+            # 分页
+            if params:
+                statement = statement.offset(params.offset).limit(params.limit)
+            else:
+                params = PaginationParams(page=1, size=100)
+                statement = statement.offset(params.offset).limit(params.limit)
+
+            items_result = await self.session.execute(statement)
+            items = list(items_result.scalars().all())
+
+            return PaginatedResult.create(items, total, params)
 
         except Exception as e:
-            logger.error("agent_repository_count_failed", error=str(e))
-            return 0
-
-    async def get_active_count_by_tenant(self, tenant_id: int) -> int:
-        """获取指定租户的活跃 Agent 数量"""
-        try:
-            from sqlalchemy import func
-
-            statement = (
-                select(func.count())
-                .select_from(Agent)
-                .where(Agent.status == AgentStatus.ACTIVE)
-                .where(Agent.tenant_id == tenant_id)
-            )
-            result = await self.session.execute(statement)
-            return result.scalar() or 0
-        except Exception as e:
-            logger.error("agent_repository_count_failed", tenant_id=tenant_id, error=str(e))
-            return 0
-
-    async def list_ids_by_tenant(self, tenant_id: int) -> list[int]:
-        """列出租户下所有 Agent ID"""
-        try:
-            statement = select(Agent.id).where(Agent.tenant_id == tenant_id)
-            result = await self.session.execute(statement)
-            return [row[0] for row in result.all() if row[0] is not None]
-        except Exception as e:
-            logger.error("agent_repository_list_ids_failed", tenant_id=tenant_id, error=str(e))
-            return []
-
-
-class AgentExecutionRepositoryAsync:
-    """Agent 执行历史异步仓储"""
-
-    def __init__(self, session: AsyncSession) -> None:
-        """初始化仓储
-
-        Args:
-            session: 异步数据库会话
-        """
-        self.session = session
-
-    async def list_by_agent(
-        self,
-        agent_id: int,
-        limit: int = 50,
-    ) -> list[AgentExecution]:
-        """列出 Agent 的执行记录
-
-        Args:
-            agent_id: Agent ID
-            limit: 限制数量
-
-        Returns:
-            执行记录列表
-        """
-        try:
-            statement = (
-                select(AgentExecution)
-                .where(AgentExecution.agent_id == agent_id)
-                .order_by(desc(AgentExecution.created_at))
-                .limit(limit)
-            )
-            result = await self.session.execute(statement)
-            return list(result.scalars().all())
-
-        except Exception as e:
-            logger.error(
-                "agent_execution_repository_list_by_agent_failed",
-                agent_id=agent_id,
-                error=str(e),
-            )
-            return []
-
-    async def list_by_agents(
-        self,
-        agent_ids: list[int],
-        limit: int = 50,
-    ) -> list[AgentExecution]:
-        """列出多个 Agent 的执行记录"""
-        if not agent_ids:
-            return []
-        try:
-            statement = (
-                select(AgentExecution)
-                .where(AgentExecution.agent_id.in_(agent_ids))
-                .order_by(AgentExecution.created_at.desc())
-                .limit(limit)
-            )
-            result = await self.session.execute(statement)
-            return list(result.scalars().all())
-        except Exception as e:
-            logger.error("agent_execution_list_by_agents_failed", error=str(e))
-            return []
-
-    async def list_recent(
-        self,
-        limit: int = 20,
-    ) -> list[AgentExecution]:
-        """列出最近的执行记录
-
-        Args:
-            limit: 限制数量
-
-        Returns:
-            执行记录列表
-        """
-        try:
-            statement = (
-                select(AgentExecution)
-                .order_by(desc(AgentExecution.created_at))
-                .limit(limit)
-            )
-            result = await self.session.execute(statement)
-            return list(result.scalars().all())
-
-        except Exception as e:
-            logger.error("agent_execution_repository_list_recent_failed", error=str(e))
-            return []
+            logger.error("agent_repository_list_with_tools_failed", tenant_id=tenant_id, error=str(e))
+            return PaginatedResult.create([], 0, params or PaginationParams())

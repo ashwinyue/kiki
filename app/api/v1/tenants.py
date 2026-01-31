@@ -4,14 +4,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.auth.middleware import (
+from app.middleware import (
     require_tenant,
     TenantIdDep,
 )
 from app.models.database import Tenant, TenantCreate, TenantPublic, TenantUpdate
 from app.services.tenant import TenantService
 from app.infra.database import get_session
-from app.schemas.tenant import ApiKeyResponse, TenantListResponse
+from app.schemas.tenant import ApiKeyResponse, TenantListResponse, TenantItem, TenantSearchResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
@@ -212,3 +212,46 @@ async def update_my_config(
     await service.update_tenant(current_tenant_id, TenantUpdate(config=current_config))
 
     return current_config
+
+
+@router.get("/search", response_model=TenantSearchResponse)
+async def search_tenants(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    current_tenant_id: Annotated[int, Depends(require_tenant)],
+    keyword: str | None = Query(None, description="搜索关键词"),
+    status: str | None = Query(None, description="状态筛选"),
+    page: int = Query(1, ge=1, description="页码"),
+    size: int = Query(20, ge=1, le=100, description="每页数量"),
+):
+    """搜索租户
+
+    支持按名称、描述、业务类型搜索，支持状态筛选和分页。
+    对齐 WeKnora 的 /tenants/search API。
+    """
+    service = TenantService(session)
+
+    # 获取当前租户（用于权限验证）
+    current_tenant = await service.get_tenant_by_id(current_tenant_id)
+    if not current_tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="租户不存在",
+        )
+
+    # 执行搜索
+    tenants, total = await service.search_tenants(
+        keyword=keyword,
+        status=status,
+        page=page,
+        size=size,
+    )
+
+    # 转换为响应模型
+    items = [TenantItem.model_validate(t) for t in tenants]
+
+    return TenantSearchResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=size,
+    )

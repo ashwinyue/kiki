@@ -21,7 +21,7 @@ Kiki Agent Framework 的设计目标是提供一个**生产就绪**的企业级 
 | **分层架构** | API/Service/Data 分离 | `app/api/`, `app/agent/`, `app/repositories/` |
 | **依赖注入** | 控制反转，降低耦合 | `get_settings()`, `get_llm_service()`, `get_agent()` |
 | **单一职责** | 每个模块只负责一件事 | 独立的 Service/Repository/工具类 |
-| **接口隔离** | 细粒度的接口定义 | `BaseGraph`, `BaseToolRegistry` |
+| **接口隔离** | 细粒度的接口定义 | `CompiledStateGraph`, `BaseToolRegistry` |
 | **开闭原则** | 扩展开放，修改关闭 | 工具注册表、模型注册表 |
 
 ---
@@ -266,11 +266,11 @@ class LangGraphAgent:
 
 | 图类型 | 文件 | 用途 |
 |--------|------|------|
-| **ChatGraph** | `graphs/chat.py` | 基础对话，支持工具调用 |
-| **ReactGraph** | `graphs/react.py` | ReAct 推理模式 |
-| **RouterGraph** | `graphs/router.py` | 路由到不同子 Agent |
-| **SupervisorGraph** | `graphs/supervisor.py` | 监督者协调多 Agent |
-| **SwarmGraph** | `graphs/swarm.py` | 群体协作模式 |
+| **ChatGraph** | `graph/builder.py` | 基础对话，支持工具调用 |
+| **ReactGraph** | `graph/react.py` | ReAct 推理模式 |
+| **RouterGraph** | `multi_agent/router.py` | 路由到不同子 Agent |
+| **SupervisorGraph** | `multi_agent/supervisor.py` | 监督者协调多 Agent |
+| **SwarmGraph** | `multi_agent/swarm.py` | 群体协作模式 |
 
 #### 3.1.3 状态管理
 

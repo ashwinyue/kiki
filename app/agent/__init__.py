@@ -1,10 +1,8 @@
 """Agent 核心模块
 
 包含：
-- state: Agent 状态定义（使用 add_messages reducer）
-- graphs: LangGraph 工作流（BaseGraph + ChatGraph + ReactGraph）
+- graph: LangGraph 工作流（参考 DeerFlow 结构）
 - tools: 工具系统（registry + builtin 示例工具）
-- tool_interceptor: 工具执行拦截器
 - agent: Agent 管理类（LangGraphAgent 门面）
 - factory: Agent 工厂模式（统一创建接口）
 - callbacks: Callback Handler（Langfuse + Prometheus）
@@ -15,20 +13,16 @@
 目录结构:
     agent/
     ├── __init__.py       # 本文件
-    ├── state.py          # AgentState 定义（增强版，参考 DeerFlow）
-    ├── retry.py          # 重试机制（参考 AI 训练营 p13-toolRetry.py）
-    ├── graphs/           # 图工作流
-    │   ├── base.py       # BaseGraph 抽象基类
-    │   ├── chat.py       # ChatGraph 基础对话图
-    │   ├── react.py      # ReactGraph ReAct 模式
+    ├── graph/            # LangGraph 工作流（新结构，参考 DeerFlow）
+    │   ├── types.py      # 状态定义
     │   ├── nodes.py      # 节点函数
-    │   └── routes.py     # 路由函数
+    │   ├── builder.py    # 图构建函数
+    │   └── utils.py      # 工具函数
     ├── tools/            # 工具系统
     │   ├── registry.py   # 工具注册表
     │   └── builtin/      # 内置示例工具
-    ├── tool_interceptor.py  # 工具拦截器（参考 DeerFlow）
     ├── agent.py          # LangGraphAgent 门面类
-    ├── factory.py        # Agent 工厂（增强版，参考 DeerFlow）
+    ├── factory.py        # Agent 工厂
     ├── callbacks/        # Callback Handlers
     ├── prompts/          # Prompt 模板
     └── memory/           # Memory 管理
@@ -39,19 +33,6 @@ from app.agent.agent import (
     LangGraphAgent,
     create_agent,
     get_agent,
-)
-from app.agent.capabilities.clarification import (
-    ClarificationNode,
-    build_clarified_query,
-    build_clarified_topic_from_history,
-    complete_clarification,
-    create_clarification_prompt,
-    format_clarification_context,
-    get_clarification_summary,
-    needs_clarification,
-    record_clarification,
-    reset_clarification,
-    should_prompt_clarification,
 )
 from app.agent.factory import (
     AGENT_LLM_MAP,
@@ -64,22 +45,51 @@ from app.agent.factory import (
 from app.agent.factory import (
     create_agent as factory_create_agent,
 )
-from app.agent.graphs import (
-    BaseGraph,
-    ChatGraph,
-    ReactAgent,
+
+# 图模块（新结构，推荐使用）
+from app.agent.graph import (
+    # 状态类型
+    AgentState,
+    ChatState,
+    ReActState,
+    add_messages,
+    create_agent_state,
+    create_chat_state,
+    create_react_state,
+    create_state_from_input,
+    increment_iteration,
+    preserve_state_meta_fields,
+    should_stop_iteration,
+    # 构建函数
+    build_chat_graph,
+    compile_chat_graph,
+    invoke_chat_graph,
+    stream_chat_graph,
+    # 节点函数
     chat_node,
-    create_chat_graph,
-    create_react_agent,
+    create_chat_node_factory,
     route_by_tools,
     tools_node,
+    # Human-in-the-Loop
+    HumanApproval,
+    InterruptGraph,
+    InterruptRequest,
+    create_interrupt_graph,
+    # ReAct Agent
+    ReactAgent,
+    create_react_agent,
+    # 图缓存
+    GraphCache,
+    get_cached_graph,
+    clear_graph_cache,
+    get_graph_cache_stats,
+    # 工具函数
+    get_message_content,
+    extract_ai_content,
+    has_tool_calls,
+    is_user_message,
 )
-from app.agent.state import (
-    AgentState,
-    create_initial_state,
-    create_state_from_input,
-    get_default_state,
-)
+
 from app.agent.tools.interceptor import (
     ToolInterceptor,
     ToolExecutionResult,
@@ -108,22 +118,15 @@ def _get_streaming():
 
     return streaming
 
-# 直接导出 streaming 主要类和函数
-from app.agent.streaming.streaming import (  # noqa: E402, F401
-    DoneEvent,
-    ErrorEvent,
-    StatusEvent,
+# 流式输出模块（基于 LangGraph）
+from app.agent.streaming import (  # noqa: E402, F401
     StreamEvent,
-    StreamingAgent,
-    TokenEvent,
-    TokenStream,
-    collect_stream,
-    create_fastapi_streaming_response,
-    stream_agent_response,
-    stream_agent_sse,
+    StreamProcessor,
+    stream_events_from_graph,
+    stream_tokens_from_graph,
 )
 
-# 上下文管理和 RAG
+# 上下文管理
 from app.agent.context import (  # noqa: E402, F401
     ContextCompressor,
     ContextManager,
@@ -134,18 +137,6 @@ from app.agent.context import (  # noqa: E402, F401
     count_tokens_precise,
     truncate_messages,
     truncate_text,
-)
-from app.agent.capabilities.rag import (  # noqa: E402, F401
-    BaseVectorStore,
-    ChromaStore,
-    PgVectorStore,
-    PineconeStore,
-    SearchResult,
-    VectorStoreConfig,
-    VectorStoreType,
-    create_vector_store,
-    index_documents,
-    retrieve_documents,
 )
 from app.agent.memory.window import (  # noqa: E402, F401
     TrimStrategy,
@@ -202,22 +193,49 @@ def _get_window_memory():
 
 
 __all__ = [
+    # ============== 图模块（新，推荐使用）=============
     # State
+    "ChatState",
     "AgentState",
-    "create_initial_state",
+    "ReActState",
+    "add_messages",
+    "create_chat_state",
+    "create_agent_state",
+    "create_react_state",
     "create_state_from_input",
-    "get_default_state",
-    # Graphs - 抽象基类
-    "BaseGraph",
-    # Graphs - 具体实现
-    "ChatGraph",
-    "ReactAgent",
-    "create_chat_graph",
-    "create_react_agent",
-    # Graphs - 节点和路由（供扩展使用）
+    # Builder
+    "build_chat_graph",
+    "compile_chat_graph",
+    "invoke_chat_graph",
+    "stream_chat_graph",
+    # Nodes
     "chat_node",
     "tools_node",
     "route_by_tools",
+    "create_chat_node_factory",
+    # Utils
+    "get_message_content",
+    "is_user_message",
+    "format_messages_to_dict",
+    "extract_ai_content",
+    "preserve_state_meta_fields",
+    "should_stop_iteration",
+    "has_tool_calls",
+    # Human-in-the-Loop
+    "InterruptGraph",
+    "create_interrupt_graph",
+    "HumanApproval",
+    "InterruptRequest",
+    # ReAct Agent
+    "ReactAgent",
+    "create_react_agent",
+    # Graph Cache
+    "GraphCache",
+    "get_graph_cache",
+    "get_cached_graph",
+    "clear_graph_cache",
+    "get_graph_cache_stats",
+    # ============== 其他模块 ==============
     # Tools - 注册系统
     "register_tool",
     "get_tool",
@@ -261,30 +279,11 @@ __all__ = [
     "LLMType",
     "AGENT_LLM_MAP",
     "factory_create_agent",
-    # Clarification - 意图澄清
-    "needs_clarification",
-    "should_prompt_clarification",
-    "record_clarification",
-    "complete_clarification",
-    "reset_clarification",
-    "build_clarified_query",
-    "build_clarified_topic_from_history",
-    "get_clarification_summary",
-    "create_clarification_prompt",
-    "format_clarification_context",
-    "ClarificationNode",
-    # Streaming - 流式输出
+    # Streaming - 流式输出（基于 LangGraph）
     "StreamEvent",
-    "TokenEvent",
-    "ToolCallEvent",
-    "ErrorEvent",
-    "StatusEvent",
-    "DoneEvent",
-    "TokenStream",
-    "StreamingAgent",
-    "stream_agent_response",
-    "stream_agent_sse",
-    "collect_stream",
+    "StreamProcessor",
+    "stream_tokens_from_graph",
+    "stream_events_from_graph",
     # Context - 长文本处理
     "ContextManager",
     "SlidingContextWindow",
@@ -295,17 +294,6 @@ __all__ = [
     "count_tokens_precise",
     "truncate_messages",
     "truncate_text",
-    # RAG - 检索增强
-    "BaseVectorStore",
-    "PgVectorStore",
-    "PineconeStore",
-    "ChromaStore",
-    "VectorStoreConfig",
-    "VectorStoreType",
-    "SearchResult",
-    "create_vector_store",
-    "retrieve_documents",
-    "index_documents",
     # Memory - 窗口记忆
     "TrimStrategy",
     "TokenCounterType",
@@ -315,7 +303,3 @@ __all__ = [
     "get_window_memory_manager",
     "trim_state_messages",
 ]
-
-# 向后兼容：保留旧名称
-AgentGraph = ChatGraph  # type: ignore
-create_agent_graph = create_chat_graph  # type: ignore

@@ -1,308 +1,293 @@
 """Agent 状态定义
 
-使用 LangGraph 的 add_messages reducer 实现消息历史的自动追加。
-参考 DeerFlow 的 State 设计，增强企业级功能。
+基于 LangGraph StateGraph，提供 Agent 状态管理。
+
+遵循 LangGraph 最佳实践：
+- 使用 TypedDict 定义状态结构
+- 使用 Annotated 和 add_messages reducer 管理消息
+- 支持自定义 reducer 控制状态更新行为
 """
 
-from dataclasses import field
-from typing import Annotated, Any
+from typing import Any, Literal
 
 from langchain_core.messages import BaseMessage
-from typing_extensions import TypedDict
+from langgraph.graph import MessagesState
+from langgraph.graph.message import add_messages
+from typing_extensions import Annotated, TypedDict
+
+from app.observability.logging import get_logger
+
+logger = get_logger(__name__)
 
 
-# 自定义 reducer：确保迭代计数正确累加
-def _add_iteration(left: int | None, right: int | None) -> int:
-    """迭代计数累加器
-
-    Args:
-        left: 当前计数值
-        right: 要增加的值
-
-    Returns:
-        累加后的计数值
-    """
-    left_count = left or 0
-    right_count = right or 0
-    return left_count + right_count
+# ============== 状态定义 ==============
 
 
-def _merge_lists(left: list[Any] | None, right: list[Any] | None) -> list[Any]:
-    """列表合并 reducer（去重）
+class ChatState(MessagesState):
+    """聊天状态（扩展 MessagesState）
 
-    Args:
-        left: 当前列表
-        right: 要添加的列表
+    继承 LangGraph 的 MessagesState，自动包含 messages 字段
+    并使用 add_messages reducer 管理消息历史。
 
-    Returns:
-        合并后的列表（去重）
-    """
-    left_list = left or []
-    right_list = right or []
-    merged = left_list + right_list
-    # 简单去重（适用于可哈希元素）
-    try:
-        return list(dict.fromkeys(merged))
-    except TypeError:
-        # 如果有不可哈希的元素，直接返回合并结果
-        return merged
-
-
-def _trim_messages(
-    left: list[BaseMessage] | None,
-    right: list[BaseMessage] | None,
-) -> list[BaseMessage]:
-    """消息滑动窗口 Reducer
-
-    自动修剪超过窗口大小的消息历史，保留最近的消息。
-    始终保留第一条系统消息（如果有）。
-
-    Args:
-        left: 当前消息列表
-        right: 新增的消息列表
-
-    Returns:
-        修剪后的消息列表
-    """
-    from app.config.settings import get_settings
-
-    settings = get_settings()
-    max_messages = settings.agent_max_messages  # 从配置读取最大消息数
-
-    # 合并消息
-    left_messages = left or []
-    right_messages = right or []
-    merged = left_messages + right_messages
-
-    # 如果消息数量未超过限制，直接返回
-    if len(merged) <= max_messages:
-        return merged
-
-    # 检查是否有系统消息需要保留
-    system_message = None
-    other_messages = []
-    for msg in merged:
-        if msg.type == "system" and system_message is None:
-            system_message = msg
-        else:
-            other_messages.append(msg)
-
-    # 保留最近的消息（不包括系统消息）
-    # 计算可保留的非系统消息数量
-    available_slots = max_messages - (1 if system_message else 0)
-    trimmed_other = (
-        other_messages[-available_slots:]
-        if len(other_messages) > available_slots
-        else other_messages
-    )
-
-    # 组合结果
-    if system_message:
-        return [system_message] + trimmed_other
-    return trimmed_other
-
-
-class AgentState(TypedDict, total=False):
-    """Agent 状态
-
-    使用 LangGraph 的 add_messages reducer 实现消息历史的自动管理。
-    使用滑动窗口 reducer 自动修剪超过限制的消息。
-    参考 DeerFlow 的 State 设计，增强企业级功能。
+    扩展字段用于存储聊天相关元数据。
 
     Attributes:
-        messages: 消息历史（使用滑动窗口 reducer 自动修剪）
-        user_id: 用户 ID（用于多租户和长期记忆）
-        session_id: 会话 ID（用于状态恢复）
-        agent_id: 当前 Agent ID
-        locale: 语言环境（默认 "zh-CN"）
-
-        # 迭代控制（防止无限循环）
-        iteration_count: 当前迭代次数
-        max_iterations: 最大允许迭代次数（默认 50）
-
-        # 任务状态
-        current_task: 当前任务描述
-        observations: 观察记录列表
-        final_output: 最终输出
-
-        # 工作流控制
-        goto: 下一个节点（用于工作流路由）
-        next_node: 下一个节点（别名）
-        _next_agent: 内部路由决策字段（用于 Router Agent）
-        _next_worker: 内部监督决策字段（用于 Supervisor Agent）
-        _handoff_target: 内部切换目标字段（用于 Handoff Agent）
-
-        # 工具控制
-        interrupt_before_tools: 需要中断执行的工具名称列表
-        tool_execution_history: 工具执行历史
-
-        # 澄清机制（多轮对话）
-        enable_clarification: 是否启用澄清功能
-        clarification_rounds: 澄清轮次
-        clarification_history: 澄清历史
-        max_clarification_rounds: 最大澄清轮次（默认 3）
-        is_clarification_complete: 澄清是否完成
-
-        # 窗口记忆（Token 限制）
-        llm_input_messages: 修剪后用于 LLM 输入的消息
-        window_max_tokens: 窗口最大 Token 数
-        window_strategy: 窗口修剪策略（last/first）
-
-        # 扩展元数据
-        metadata: 扩展元数据字典
+        messages: 消息列表（继承自 MessagesState，自动使用 add_messages reducer）
+        user_id: 用户 ID
+        session_id: 会话 ID
+        tenant_id: 租户 ID
+        iteration_count: 迭代计数（用于防止无限循环）
+        max_iterations: 最大迭代次数
+        error: 错误信息
     """
 
-    # ========== 消息历史 ==========
-    messages: Annotated[list[BaseMessage], _trim_messages]
-
-    # ========== 用户上下文 ==========
+    # 用户和会话信息
     user_id: str | None
-    session_id: str | None
-    agent_id: str | None
-    locale: str
+    session_id: str
+    tenant_id: int | None
 
-    # ========== 迭代控制 ==========
-    iteration_count: Annotated[int, _add_iteration]
+    # 迭代控制
+    iteration_count: int
     max_iterations: int
 
-    # ========== 任务状态 ==========
-    current_task: dict[str, Any] | None
-    observations: Annotated[list[str], _merge_lists]
-    final_output: str | None
-
-    # ========== 工作流控制 ==========
-    goto: str
-    next_node: str | None
-    _next_agent: str | None
-    _next_worker: str | None
-    _handoff_target: str | None
-
-    # ========== 工具控制 ==========
-    interrupt_before_tools: list[str]
-    tool_execution_history: list[dict[str, Any]]
-
-    # ========== 澄清机制 ==========
-    enable_clarification: bool
-    clarification_rounds: int
-    clarification_history: list[str]
-    max_clarification_rounds: int
-    is_clarification_complete: bool
-
-    # ========== 窗口记忆 ==========
-    llm_input_messages: list[BaseMessage] | None
-    window_max_tokens: int
-    window_strategy: str
-
-    # ========== 扩展元数据 ==========
-    metadata: dict[str, Any]
+    # 错误处理
+    error: str | None
 
 
-def create_initial_state(
+class AgentState(TypedDict):
+    """通用 Agent 状态（不使用 MessagesState）
+
+    完全自定义的状态定义，适用于需要精细控制的场景。
+
+    Attributes:
+        messages: 消息列表（使用 add_messages reducer）
+        query: 当前查询
+        rewrite_query: 重写后的查询
+        search_results: 搜索结果
+        context_str: 构建的上下文
+        iteration_count: 迭代计数
+        max_iterations: 最大迭代次数
+        error: 错误信息
+    """
+
+    # 消息历史（使用 add_messages reducer）
+    messages: Annotated[list[BaseMessage], add_messages]
+
+    # 查询相关
+    query: str
+    rewrite_query: str | None
+
+    # 搜索和上下文
+    search_results: list[Any]
+    context_str: str
+
+    # 控制字段
+    iteration_count: int
+    max_iterations: int
+
+    # 错误处理
+    error: str | None
+
+
+class ReActState(TypedDict):
+    """ReAct Agent 状态
+
+    用于 ReAct 模式的 Agent，支持工具调用和推理。
+
+    Attributes:
+        messages: 消息列表（使用 add_messages reducer）
+        tool_calls_to_execute: 待执行的工具调用
+        iteration_count: 迭代计数
+        max_iterations: 最大迭代次数
+        error: 错误信息
+    """
+
+    messages: Annotated[list[BaseMessage], add_messages]
+    tool_calls_to_execute: list[dict[str, Any]]
+    iteration_count: int
+    max_iterations: int
+    error: str | None
+
+
+# ============== 状态工厂函数 ==============
+
+
+def create_chat_state(
     messages: list[BaseMessage] | None = None,
     user_id: str | None = None,
-    session_id: str | None = None,
-    agent_id: str | None = None,
-    max_iterations: int | None = None,
-    locale: str = "zh-CN",
-    enable_clarification: bool = False,
-    interrupt_before_tools: list[str] | None = None,
-    metadata: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """创建初始状态
+    session_id: str = "",
+    tenant_id: int | None = None,
+) -> ChatState:
+    """创建聊天状态
 
     Args:
         messages: 初始消息列表
         user_id: 用户 ID
         session_id: 会话 ID
-        agent_id: Agent ID
-        max_iterations: 最大迭代次数（防止无限循环）
-        locale: 语言环境
-        enable_clarification: 是否启用澄清功能
-        interrupt_before_tools: 需要中断的工具列表
-        metadata: 扩展元数据
+        tenant_id: 租户 ID
 
     Returns:
-        初始状态字典
+        ChatState 实例
     """
-    from app.config.settings import get_settings
+    return ChatState(
+        messages=messages or [],
+        user_id=user_id,
+        session_id=session_id,
+        tenant_id=tenant_id,
+        iteration_count=0,
+        max_iterations=10,
+        error=None,
+    )
 
-    settings = get_settings()
-    resolved_max_iterations = max_iterations or settings.agent_max_iterations
 
-    return {
-        "messages": messages or [],
-        "user_id": user_id,
-        "session_id": session_id,
-        "agent_id": agent_id,
-        "locale": locale,
-        "iteration_count": 0,
-        "max_iterations": resolved_max_iterations,
-        "current_task": None,
-        "observations": [],
-        "final_output": None,
-        "goto": "",
-        "next_node": None,
-        "_next_agent": None,
-        "_next_worker": None,
-        "_handoff_target": None,
-        "interrupt_before_tools": interrupt_before_tools or [],
-        "tool_execution_history": [],
-        "enable_clarification": enable_clarification,
-        "clarification_rounds": 0,
-        "clarification_history": [],
-        "max_clarification_rounds": resolved_max_iterations // 10,
-        "is_clarification_complete": False,
-        "llm_input_messages": None,
-        "window_max_tokens": settings.context_max_tokens,
-        "window_strategy": "last",
-        "metadata": metadata or {},
-    }
+def create_agent_state(
+    query: str = "",
+    messages: list[BaseMessage] | None = None,
+) -> AgentState:
+    """创建 Agent 状态
+
+    Args:
+        query: 初始查询
+        messages: 初始消息列表
+
+    Returns:
+        AgentState 实例
+    """
+    return AgentState(
+        messages=messages or [],
+        query=query,
+        rewrite_query=None,
+        search_results=[],
+        context_str="",
+        iteration_count=0,
+        max_iterations=10,
+        error=None,
+    )
+
+
+def create_react_state(
+    messages: list[BaseMessage] | None = None,
+) -> ReActState:
+    """创建 ReAct 状态
+
+    Args:
+        messages: 初始消息列表
+
+    Returns:
+        ReActState 实例
+    """
+    return ReActState(
+        messages=messages or [],
+        tool_calls_to_execute=[],
+        iteration_count=0,
+        max_iterations=10,
+        error=None,
+    )
 
 
 def create_state_from_input(
-    input_text: str,
-    user_id: str | None = None,
+    input_data: str | dict[str, Any],
     session_id: str | None = None,
-    agent_id: str | None = None,
-    max_iterations: int | None = None,
-    locale: str = "zh-CN",
-    enable_clarification: bool = False,
-) -> dict[str, Any]:
-    """从用户输入创建状态
+    user_id: str | None = None,
+    tenant_id: int | None = None,
+) -> ChatState:
+    """从输入创建状态
+
+    兼容旧版 API，返回 ChatState。
 
     Args:
-        input_text: 用户输入文本
-        user_id: 用户 ID
+        input_data: 输入数据（字符串或字典）
         session_id: 会话 ID
-        agent_id: Agent ID
-        max_iterations: 最大迭代次数（防止无限循环）
-        locale: 语言环境
-        enable_clarification: 是否启用澄清功能
+        user_id: 用户 ID
+        tenant_id: 租户 ID
 
     Returns:
-        初始状态字典
+        ChatState 实例
     """
+    if isinstance(input_data, str):
+        query = input_data
+    else:
+        query = input_data.get("query", input_data.get("message", ""))
+
     from langchain_core.messages import HumanMessage
 
-    return {
-        **create_initial_state(
-            messages=[HumanMessage(content=input_text)],
-            user_id=user_id,
-            session_id=session_id,
-            agent_id=agent_id,
-            max_iterations=max_iterations,
-            locale=locale,
-            enable_clarification=enable_clarification,
-        ),
-    }
+    messages = [HumanMessage(content=query)] if query else []
+
+    return ChatState(
+        messages=messages,
+        user_id=user_id,
+        session_id=session_id or "",
+        tenant_id=tenant_id,
+        iteration_count=0,
+        max_iterations=10,
+        error=None,
+    )
 
 
-def get_default_state() -> dict[str, Any]:
-    """获取默认状态（空状态）
+# ============== 便捷函数 ==============
 
-    用于初始化或重置状态。
+
+def increment_iteration(state: dict[str, Any]) -> dict[str, Any]:
+    """增加迭代计数
+
+    Args:
+        state: 当前状态
 
     Returns:
-        默认状态字典
+        更新后的状态增量
     """
-    return create_initial_state()
+    current = state.get("iteration_count", 0)
+    return {"iteration_count": current + 1}
+
+
+def should_stop_iteration(state: dict[str, Any]) -> bool:
+    """检查是否应该停止迭代
+
+    Args:
+        state: 当前状态
+
+    Returns:
+        是否应该停止
+    """
+    iteration_count = state.get("iteration_count", 0)
+    max_iterations = state.get("max_iterations", 10)
+    return iteration_count >= max_iterations
+
+
+def merge_lists(
+    state: dict[str, Any],
+    key: str,
+    new_items: list[Any],
+) -> dict[str, Any]:
+    """合并列表（内部使用）
+
+    Args:
+        state: 当前状态
+        key: 列表键
+        new_items: 新项目
+
+    Returns:
+        更新后的状态增量
+    """
+    existing = state.get(key, [])
+    return {key: existing + new_items}
+
+
+# 导出
+__all__ = [
+    # 状态类
+    "ChatState",
+    "AgentState",
+    "ReActState",
+    # 工厂函数
+    "create_chat_state",
+    "create_agent_state",
+    "create_react_state",
+    "create_state_from_input",
+    # 便捷函数
+    "increment_iteration",
+    "should_stop_iteration",
+    "merge_lists",
+    # 向后兼容
+    "add_messages",
+]

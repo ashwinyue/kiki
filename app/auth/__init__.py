@@ -23,11 +23,6 @@ from app.auth.jwt import (
     get_token_sub,
     verify_token,
 )
-from app.auth.middleware import (
-    RequiredTenantIdDep,
-    TenantIdDep,
-    TenantMiddleware,
-)
 from app.auth.tenant import TenantContext, get_tenant_context, set_tenant_context
 from app.auth.tenant_api_key import (
     DecodedAPIKey,
@@ -66,8 +61,4 @@ __all__ = [
     "extract_tenant_id_from_api_key",
     "validate_api_key",
     "get_api_key_secret",
-    # Middleware
-    "TenantMiddleware",
-    "TenantIdDep",
-    "RequiredTenantIdDep",
 ]

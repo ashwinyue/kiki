@@ -1,8 +1,33 @@
 """统一的 Kiki Callback Handler
 
-集成 Langfuse 追踪、Prometheus 指标和结构化日志。
-"""
+集成 LangSmith/Langfuse 追踪、Prometheus 指标和结构化日志。
 
+使用示例:
+```python
+from app.agent.callbacks.handler import KikiCallbackHandler
+
+# 创建 callback handler
+handler = KikiCallbackHandler(
+    session_id="session-123",
+    user_id="user-456",
+)
+
+# 在 LangGraph 中使用
+result = graph.invoke(
+    input_data,
+    config={"callbacks": [handler]}
+)
+```
+
+LangSmith 集成:
+通过环境变量自动启用，无需额外配置:
+- LANGCHAIN_TRACING_V2=true
+- LANGCHAIN_API_KEY=your-key
+- LANGCHAIN_PROJECT=your-project
+"""
+from __future__ import annotations
+
+import time
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -10,11 +35,27 @@ from langchain_core.messages import BaseMessage
 from langchain_core.outputs import LLMResult
 
 from app.config.settings import get_settings
+from app.observability.audit import AuditEventType, record_agent_event, record_tool_call
+from app.observability.logging import get_logger, bind_context
 from app.llm import resolve_provider
-from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+
+def _fire_andforget(coro) -> None:
+    """Fire-and-forget 异步任务执行
+
+    在同步上下文中安全地启动异步任务，不阻塞主流程。
+    """
+    import asyncio
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(coro)
+    except RuntimeError:
+        # 没有运行中的事件循环，跳过
+        pass
 
 
 class KikiCallbackHandler(BaseCallbackHandler):
@@ -25,12 +66,16 @@ class KikiCallbackHandler(BaseCallbackHandler):
     - 工具调用的记录
     - Token 使用统计
     - 错误追踪
+    - 审计日志记录
+    - LangSmith/Langfuse 追踪
 
     Attributes:
         session_id: 会话 ID
         user_id: 用户 ID
         enable_langfuse: 是否启用 Langfuse 追踪
+        enable_langsmith: 是否启用 Langsmith 追踪（自动）
         enable_metrics: 是否启用 Prometheus 指标
+        enable_audit: 是否启用审计日志
     """
 
     def __init__(
@@ -38,7 +83,9 @@ class KikiCallbackHandler(BaseCallbackHandler):
         session_id: str,
         user_id: str | None = None,
         enable_langfuse: bool = True,
+        enable_langsmith: bool = True,
         enable_metrics: bool = True,
+        enable_audit: bool = True,
     ) -> None:
         """初始化 Callback Handler
 
@@ -46,30 +93,43 @@ class KikiCallbackHandler(BaseCallbackHandler):
             session_id: 会话 ID
             user_id: 用户 ID
             enable_langfuse: 是否启用 Langfuse 追踪
+            enable_langsmith: 是否启用 Langsmith 追踪（通过环境变量自动启用）
             enable_metrics: 是否启用 Prometheus 指标
+            enable_audit: 是否启用审计日志
         """
         super().__init__()
         self.session_id = session_id
         self.user_id = user_id
         self.enable_langfuse = enable_langfuse
+        self.enable_langsmith = enable_langsmith
         self.enable_metrics = enable_metrics
+        self.enable_audit = enable_audit
 
         # 统计信息
         self._llm_start_time: float | None = None
         self._tool_start_time: float | None = None
+        self._current_tool_name: str | None = None
+        self._current_model: str | None = None
         self._token_usage: dict[str, int] = {}
 
         # Langfuse 客户端（延迟初始化）
-        self._langfuse = None
+        self._langfuse: Any | None = None
+
+        # 绑定日志上下文
+        bind_context(session_id=session_id, user_id=user_id)
 
         logger.debug(
             "callback_handler_initialized",
             session_id=session_id,
             user_id=user_id,
+            enable_langfuse=enable_langfuse,
+            enable_langsmith=enable_langsmith,
+            enable_metrics=enable_metrics,
+            enable_audit=enable_audit,
         )
 
     @property
-    def langfuse(self):
+    def langfuse(self) -> Any | None:
         """获取 Langfuse 客户端（延迟初始化）"""
         if self._langfuse is None and self.enable_langfuse and settings.langfuse_enabled:
             try:
@@ -100,28 +160,44 @@ class KikiCallbackHandler(BaseCallbackHandler):
             prompts: 提示词列表
             **kwargs: 额外参数
         """
-        import time
-
         self._llm_start_time = time.time()
+        self._current_model = serialized.get("name", "unknown")
 
         logger.info(
             "llm_start",
             session_id=self.session_id,
             user_id=self.user_id,
-            model=serialized.get("name", "unknown"),
+            model=self._current_model,
             prompt_count=len(prompts),
         )
 
-        # Langfuse 追踪
-        if self.langfuse:
+        # 审计日志记录
+        if self.enable_audit:
             try:
-                self.langfuse.score(
-                    name="llm_start",
-                    value=1.0,
-                    comment=f"LLM调用开始: {serialized.get('name')}",
-                )
+                # 使用 fire-and-forget 方式记录，不阻塞主流程
+                import asyncio
+
+                async def _record():
+                    await record_agent_event(
+                        event_type=AuditEventType.AGENT_STARTED,
+                        agent_id=self._current_model,
+                        data={
+                            "model": self._current_model,
+                            "prompt_count": len(prompts),
+                        },
+                        user_id=self.user_id,
+                        session_id=self.session_id,
+                    )
+
+                # 尝试获取运行中的事件循环
+                try:
+                    loop = asyncio.get_running_loop()
+                    asyncio.create_task(_record())
+                except RuntimeError:
+                    # 没有运行中的事件循环，跳过
+                    pass
             except Exception as e:
-                logger.debug("langfuse_score_failed", error=str(e))
+                logger.debug("audit_record_failed", error=str(e))
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
         """LLM 调用结束时的回调
@@ -130,8 +206,6 @@ class KikiCallbackHandler(BaseCallbackHandler):
             response: LLM 响应结果
             **kwargs: 额外参数
         """
-        import time
-
         duration = None
         if self._llm_start_time:
             duration = time.time() - self._llm_start_time
@@ -147,6 +221,7 @@ class KikiCallbackHandler(BaseCallbackHandler):
             "llm_end",
             session_id=self.session_id,
             user_id=self.user_id,
+            model=self._current_model,
             duration_seconds=duration,
             token_usage=token_usage,
             generations_count=len(response.generations),
@@ -157,10 +232,8 @@ class KikiCallbackHandler(BaseCallbackHandler):
             try:
                 from app.observability import metrics
 
-                model_name = response.llm_output.get("model_name", "unknown")
-                provider = response.llm_output.get("provider") or resolve_provider(model_name)
-                if isinstance(response.llm_output, dict):
-                    response.llm_output.setdefault("provider", provider)
+                model_name = self._current_model or "unknown"
+                provider = resolve_provider(model_name)
 
                 if duration:
                     metrics.llm_duration_seconds.labels(
@@ -190,6 +263,31 @@ class KikiCallbackHandler(BaseCallbackHandler):
                 pass
             except Exception as e:
                 logger.debug("metrics_record_failed", error=str(e))
+
+        # 审计日志记录
+        if self.enable_audit:
+            try:
+                import asyncio
+
+                async def _record():
+                    await record_agent_event(
+                        event_type=AuditEventType.AGENT_COMPLETED,
+                        agent_id=self._current_model or "unknown",
+                        data={
+                            "model": self._current_model,
+                            "duration_seconds": duration,
+                            "token_usage": token_usage,
+                        },
+                        user_id=self.user_id,
+                        session_id=self.session_id,
+                    )
+
+                try:
+                    asyncio.create_task(_record())
+                except RuntimeError:
+                    pass
+            except Exception as e:
+                logger.debug("audit_record_failed", error=str(e))
 
     def on_llm_error(
         self,
@@ -240,15 +338,14 @@ class KikiCallbackHandler(BaseCallbackHandler):
             messages: 消息列表
             **kwargs: 额外参数
         """
-        import time
-
         self._llm_start_time = time.time()
+        self._current_model = serialized.get("name", "unknown")
 
         logger.debug(
             "chat_model_start",
             session_id=self.session_id,
             user_id=self.user_id,
-            model=serialized.get("name", "unknown"),
+            model=self._current_model,
             message_count=len(messages[0]) if messages else 0,
         )
 
@@ -265,17 +362,37 @@ class KikiCallbackHandler(BaseCallbackHandler):
             input_str: 工具输入
             **kwargs: 额外参数
         """
-        import time
-
         self._tool_start_time = time.time()
+        self._current_tool_name = serialized.get("name", "unknown")
 
         logger.info(
             "tool_start",
             session_id=self.session_id,
             user_id=self.user_id,
-            tool_name=serialized.get("name", "unknown"),
+            tool_name=self._current_tool_name,
             input_length=len(input_str),
         )
+
+        # 审计日志记录
+        if self.enable_audit:
+            try:
+                import asyncio
+
+                async def _record():
+                    await record_tool_call(
+                        tool_name=self._current_tool_name,
+                        tool_input={"input": input_str[:500]},  # 限长
+                        status="started",
+                        user_id=self.user_id,
+                        session_id=self.session_id,
+                    )
+
+                try:
+                    asyncio.create_task(_record())
+                except RuntimeError:
+                    pass
+            except Exception as e:
+                logger.debug("audit_record_failed", error=str(e))
 
     def on_tool_end(
         self,
@@ -288,8 +405,6 @@ class KikiCallbackHandler(BaseCallbackHandler):
             output: 工具输出
             **kwargs: 额外参数
         """
-        import time
-
         duration = None
         if self._tool_start_time:
             duration = time.time() - self._tool_start_time
@@ -299,6 +414,7 @@ class KikiCallbackHandler(BaseCallbackHandler):
             "tool_end",
             session_id=self.session_id,
             user_id=self.user_id,
+            tool_name=self._current_tool_name,
             duration_seconds=duration,
             output_length=len(output) if output else 0,
         )
@@ -309,12 +425,34 @@ class KikiCallbackHandler(BaseCallbackHandler):
                 from app.observability import metrics
 
                 metrics.tool_duration_seconds.labels(
-                    tool_name=kwargs.get("name", "unknown"),
+                    tool_name=self._current_tool_name or "unknown",
                 ).observe(duration)
             except (ImportError, AttributeError):
                 pass
             except Exception as e:
                 logger.debug("tool_metrics_failed", error=str(e))
+
+        # 审计日志记录
+        if self.enable_audit:
+            try:
+                import asyncio
+
+                async def _record():
+                    await record_tool_call(
+                        tool_name=self._current_tool_name or "unknown",
+                        tool_input={},
+                        tool_output=output[:1000] if output else None,  # 限长
+                        status="success",
+                        user_id=self.user_id,
+                        session_id=self.session_id,
+                    )
+
+                try:
+                    asyncio.create_task(_record())
+                except RuntimeError:
+                    pass
+            except Exception as e:
+                logger.debug("audit_record_failed", error=str(e))
 
     def on_tool_error(
         self,
@@ -333,10 +471,31 @@ class KikiCallbackHandler(BaseCallbackHandler):
             "tool_error",
             session_id=self.session_id,
             user_id=self.user_id,
-            tool_name=kwargs.get("name", "unknown"),
+            tool_name=self._current_tool_name,
             error_type=type(error).__name__,
             error_message=str(error),
         )
+
+        # 审计日志记录
+        if self.enable_audit:
+            try:
+                import asyncio
+
+                async def _record():
+                    await record_tool_call(
+                        tool_name=self._current_tool_name or "unknown",
+                        tool_input={},
+                        status="failed",
+                        user_id=self.user_id,
+                        session_id=self.session_id,
+                    )
+
+                try:
+                    asyncio.create_task(_record())
+                except RuntimeError:
+                    pass
+            except Exception as e:
+                logger.debug("audit_record_failed", error=str(e))
 
     def get_token_usage(self) -> dict[str, int]:
         """获取 token 使用统计

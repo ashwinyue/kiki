@@ -36,14 +36,14 @@ class TestAgentFactory:
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
 
-        with patch("app.agent.factory.ChatGraph") as mock_graph_class:
+        with patch("app.agent.factory.compile_chat_graph") as mock_compile:
             mock_graph = MagicMock()
-            mock_graph_class.return_value = mock_graph
+            mock_compile.return_value = mock_graph
 
             result = AgentFactory.create_agent("chat")  # 使用字符串字面量
 
             assert result is mock_graph
-            mock_graph.compile.assert_called_once()
+            mock_compile.assert_called_once()
 
     @patch("app.agent.factory.get_llm_service")
     def test_create_react_agent(self, mock_get_llm) -> None:

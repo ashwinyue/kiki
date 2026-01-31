@@ -10,10 +10,11 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infra.database import session_repository, thread_repository
 from app.models.database import ChatSession, SessionCreate, Thread
 from app.observability.logging import get_logger
 from app.repositories.base import PaginatedResult, PaginationParams
+from app.repositories.session import SessionRepository
+from app.repositories.thread import ThreadRepository
 from app.schemas.session import SessionCreate as SessionCreateSchema, SessionUpdate
 
 logger = get_logger(__name__)
@@ -29,8 +30,8 @@ class SessionService:
             session: 数据库会话
         """
         self.session = session
-        self.session_repo = session_repository(session)
-        self.thread_repo = thread_repository(session)
+        self.session_repo = SessionRepository(session)
+        self.thread_repo = ThreadRepository(session)
 
     async def create_session(
         self,

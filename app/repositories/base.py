@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -36,12 +36,10 @@ class PaginationParams(BaseModel):
         return min(self.size, 100)  # 最大 100
 
 
-# ============== 模型类型变量 =============
-
-T = TypeVar("T")
+# ============== 分页结果 ==============
 
 
-class PaginatedResult(BaseModel, Generic[T]):
+class PaginatedResult[T](BaseModel):
     """分页结果"""
 
     items: list[T]
@@ -56,7 +54,7 @@ class PaginatedResult(BaseModel, Generic[T]):
         items: list[T],
         total: int,
         params: PaginationParams,
-    ) -> "PaginatedResult[T]":
+    ) -> PaginatedResult[T]:
         """创建分页结果"""
         pages = (total + params.size - 1) // params.size if params.size > 0 else 0
         return cls(
@@ -71,7 +69,7 @@ class PaginatedResult(BaseModel, Generic[T]):
 # ============== 基础仓储 ==============
 
 
-class BaseRepository(Generic[T]):
+class BaseRepository[T]:
     """基础仓储类
 
     提供通用的 CRUD 操作。

@@ -70,14 +70,13 @@ agent = LangGraphAgent(
     system_prompt="你是一个专业的技术顾问"
 )
 
-# 方式 2: 使用 AgentGraph 工厂函数
-from app.agent import AgentGraph
+# 方式 2: 直接编译 Chat Graph
+from app.agent.graph import compile_chat_graph
 
-graph = AgentGraph(
+compiled_graph = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是一个专业的技术顾问"
 )
-compiled_graph = graph.compile()
 ```
 
 ### 多 Agent 系统
@@ -152,24 +151,21 @@ await agent.clear_chat_history(session_id="user-123")
 
 ## 工作流图类型
 
-### AgentGraph - 通用 Agent 图
+### Compiled Chat Graph - 通用对话图
 
-`AgentGraph` 是所有图类型的基类，提供统一的调用接口。
+`compile_chat_graph` 会返回编译后的 LangGraph，可用于统一的调用接口。
 
 ```python
-from app.agent import AgentGraph
+from app.agent.graph import compile_chat_graph
 from app.llm import get_llm_service
 
 llm_service = get_llm_service()
 
-# 创建 Agent 图
-graph = AgentGraph(
+# 编译 Agent 图
+compiled = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是一个有用的助手"
 )
-
-# 编译并使用
-compiled = graph.compile()
 
 response = await compiled.ainvoke(
     {"messages": [("user", "你好")]},
@@ -196,9 +192,9 @@ state = await compiled.aget_state(config)
 最简单的对话流程，支持工具调用。
 
 ```python
-from app.agent.graphs import create_chat_graph
+from app.agent.graph import compile_chat_graph
 
-graph = create_chat_graph(
+graph = compile_chat_graph(
     system_prompt="你是一个有用的助手"
 )
 
@@ -235,20 +231,20 @@ response = await graph.ainvoke(
      └─────────────────┘
 ```
 
-### 2. ReactGraph - ReAct 推理模式
+### 2. ReactAgent - ReAct 推理模式
 
 结合推理和行动的循环模式。
 
 ```python
-from app.agent.graphs import create_react_graph
+from app.agent.graph import create_react_agent
 
-graph = create_react_graph(
+agent = create_react_agent(
     system_prompt="你是一个研究助手，善于使用工具收集信息"
 )
 
-response = await graph.ainvoke(
-    {"messages": [("user", "查询最新的 AI 技术进展")]},
-    {"configurable": {"thread_id": "session-123"}}
+response = await agent.get_response(
+    message="查询最新的 AI 技术进展",
+    session_id="session-123",
 )
 ```
 
@@ -485,19 +481,19 @@ set_tool_error_handler(custom_handler)
 根据用户意图路由到不同的子 Agent。
 
 ```python
-from app.agent import AgentGraph
+from app.agent.graph import compile_chat_graph
 from app.agent.multi_agent import RouterAgent
 from app.llm import LLMService
 
 llm_service = LLMService()
 
 # 创建子 Agent
-sales_agent = AgentGraph(
+sales_agent = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是销售专家，介绍产品功能和价格"
 )
 
-support_agent = AgentGraph(
+support_agent = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是客服专家，负责订单查询和售后处理"
 )
@@ -527,24 +523,24 @@ print(response["messages"][-1].content)
 由监督者协调多个 Worker Agent 完成复杂任务。
 
 ```python
-from app.agent import AgentGraph
+from app.agent.graph import compile_chat_graph
 from app.agent.multi_agent import SupervisorAgent
 from app.llm import LLMService
 
 llm_service = LLMService()
 
 # 创建 Worker Agent
-researcher = AgentGraph(
+researcher = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是研究员，负责收集和分析信息"
 )
 
-writer = AgentGraph(
+writer = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是写手，负责整理和撰写报告"
 )
 
-reviewer = AgentGraph(
+reviewer = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是审核员，负责审核报告质量"
 )
@@ -627,7 +623,7 @@ response = await graph.ainvoke(
 
 ```python
 from app.agent.multi_agent import create_multi_agent_system
-from app.agent import AgentGraph
+from app.agent.graph import compile_chat_graph
 from app.llm import get_llm_service
 
 llm_service = get_llm_service()
@@ -637,8 +633,8 @@ router_graph = create_multi_agent_system(
     mode="router",
     llm_service=llm_service,
     agents={
-        "Agent1": AgentGraph(llm_service=llm_service),
-        "Agent2": AgentGraph(llm_service=llm_service),
+        "Agent1": compile_chat_graph(llm_service=llm_service),
+        "Agent2": compile_chat_graph(llm_service=llm_service),
     }
 )
 
@@ -647,8 +643,8 @@ supervisor_graph = create_multi_agent_system(
     mode="supervisor",
     llm_service=llm_service,
     workers={
-        "Worker1": AgentGraph(llm_service=llm_service),
-        "Worker2": AgentGraph(llm_service=llm_service),
+        "Worker1": compile_chat_graph(llm_service=llm_service),
+        "Worker2": compile_chat_graph(llm_service=llm_service),
     }
 )
 
@@ -854,10 +850,9 @@ KIKI_LANGCHAIN_API_KEY=your-key
 ### 1. 可视化图结构
 
 ```python
-from app.agent.graphs import ChatGraph
+from app.agent.graph import compile_chat_graph
 
-graph = ChatGraph()
-compiled = graph.compile()
+compiled = compile_chat_graph()
 
 # 打印图结构
 print(compiled.get_graph().print_ascii())

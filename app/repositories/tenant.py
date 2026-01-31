@@ -5,7 +5,7 @@
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import Tenant, TenantCreate, TenantUpdate
@@ -230,3 +230,63 @@ class TenantRepository(BaseRepository[Tenant]):
             await self.session.rollback()
             logger.error("tenant_repository_update_config_failed", tenant_id=tenant_id, error=str(e))
             raise
+
+    async def search(
+        self,
+        *,
+        keyword: str | None = None,
+        status: str | None = None,
+        params: PaginationParams | None = None,
+    ) -> PaginatedResult[Tenant]:
+        """搜索租户
+
+        Args:
+            keyword: 搜索关键词（名称、描述、业务类型）
+            status: 状态筛选
+            params: 分页参数
+
+        Returns:
+            分页结果
+        """
+        try:
+            statement = select(Tenant).where(Tenant.deleted_at.is_(None))  # type: ignore
+
+            # 关键词搜索（名称、描述、业务类型）
+            if keyword:
+                pattern = f"%{keyword}%"
+                statement = statement.where(
+                    (Tenant.name.ilike(pattern))
+                    | (Tenant.description.ilike(pattern))
+                    | (Tenant.business.ilike(pattern))
+                )
+
+            # 状态筛选
+            if status:
+                statement = statement.where(Tenant.status == status)
+
+            # 获取总数
+            count_stmt = select(func.count()).select_from(statement.subquery())
+            total_result = await self.session.execute(count_stmt)
+            total = total_result.scalar() or 0
+
+            # 分页
+            if params is None:
+                params = PaginationParams()
+            statement = statement.order_by(Tenant.id).offset(params.offset).limit(params.limit)
+
+            items_result = await self.session.execute(statement)
+            items = list(items_result.scalars().all())
+
+            logger.info(
+                "tenant_repository_search_success",
+                keyword=keyword,
+                status=status,
+                total=total,
+                page=params.page,
+            )
+
+            return PaginatedResult.create(items, total, params)
+
+        except Exception as e:
+            logger.error("tenant_repository_search_failed", keyword=keyword, error=str(e))
+            return PaginatedResult.create([], 0, params or PaginationParams())

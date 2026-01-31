@@ -139,6 +139,10 @@ coverage.xml
 .pytest_cache/
 
 # AI/Agent tools
-aold/
+#aold/
 .agents/
 .claude/
+aold/miniblog
+
+WeKnora99
+aold

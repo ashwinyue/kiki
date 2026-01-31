@@ -15,7 +15,6 @@ from app.schemas.chat import (
     ChatResponse,
     Message,
     ChatHistoryResponse,
-    ContextStatsResponse,
     SSEEvent,
 )
 
@@ -26,15 +25,19 @@ from app.schemas.agent import (
     AgentPublic,
     AgentDetailResponse,
     AgentListResponse,
-    AgentStatsResponse,
-    ExecutionItem,
-    ExecutionListResponse,
+    AgentCopyRequest,
+    AgentCopyResponse,
+    BatchAgentCopyRequest,
+    BatchAgentCopyResponse,
 )
 
 # 租户
 from app.schemas.tenant import (
     TenantListResponse,
     ApiKeyResponse,
+    TenantItem,
+    TenantSearchRequest,
+    TenantSearchResponse,
 )
 
 # MCP 服务
@@ -78,6 +81,61 @@ from app.schemas.evaluation import (
     EvaluationStatusResponse,
 )
 
+# 知识库
+from app.schemas.knowledge import (
+    ChunkingConfig,
+    KnowledgeBaseCreate,
+    KnowledgeBaseUpdate,
+    KnowledgeBaseResponse,
+    HybridSearchRequest,
+    HybridSearchResult,
+    KnowledgeResponse,
+)
+
+# 模型
+from app.schemas.model import (
+    ModelType,
+    ModelSource,
+    ModelParameters,
+    ModelCreate,
+    ModelUpdate,
+    ModelResponse,
+)
+
+# 网络搜索
+from app.schemas.web_search import (
+    WebSearchConfig,
+    WebSearchResult,
+    WebSearchProviderInfo,
+    WebSearchRequest,
+    WebSearchResponse,
+    WebSearchProvidersResponse,
+    WebSearchCompressRequest,
+    WebSearchCompressResponse,
+)
+
+# Elasticsearch
+from app.schemas.elasticsearch import (
+    IndexCreateRequest,
+    IndexStatsResponse,
+    IndexListResponse,
+    DocumentIndexRequest,
+    DocumentIndexBatchRequest,
+    DocumentUpdateRequest,
+    DocumentResponse,
+    BulkOperationResponse,
+    ElasticsearchSearchRequest,
+    HybridSearchRequest,
+    RawSearchRequest,
+    ElasticsearchSearchResult,
+    ElasticsearchSearchResponse,
+    AnalyzeRequest,
+    AnalyzeResponse,
+    AnalyzeToken,
+    ElasticsearchConfigResponse,
+    ElasticsearchHealthResponse,
+)
+
 __all__ = [
     # 统一响应
     "ApiResponse",
@@ -90,7 +148,6 @@ __all__ = [
     "ChatResponse",
     "Message",
     "ChatHistoryResponse",
-    "ContextStatsResponse",
     "SSEEvent",
     # Agent - CRUD
     "AgentConfig",
@@ -98,12 +155,16 @@ __all__ = [
     "AgentPublic",
     "AgentDetailResponse",
     "AgentListResponse",
-    "AgentStatsResponse",
-    "ExecutionItem",
-    "ExecutionListResponse",
+    "AgentCopyRequest",
+    "AgentCopyResponse",
+    "BatchAgentCopyRequest",
+    "BatchAgentCopyResponse",
     # 租户
     "TenantListResponse",
     "ApiKeyResponse",
+    "TenantItem",
+    "TenantSearchRequest",
+    "TenantSearchResponse",
     # MCP 服务
     "MCPServiceRequest",
     "MCPServiceResponse",
@@ -130,4 +191,47 @@ __all__ = [
     "DatasetListItem",
     "EvaluationRunResponse",
     "EvaluationStatusResponse",
+    # 知识库
+    "ChunkingConfig",
+    "KnowledgeBaseCreate",
+    "KnowledgeBaseUpdate",
+    "KnowledgeBaseResponse",
+    "HybridSearchRequest",
+    "HybridSearchResult",
+    "KnowledgeResponse",
+    # 模型
+    "ModelType",
+    "ModelSource",
+    "ModelParameters",
+    "ModelCreate",
+    "ModelUpdate",
+    "ModelResponse",
+    # 网络搜索
+    "WebSearchConfig",
+    "WebSearchResult",
+    "WebSearchProviderInfo",
+    "WebSearchRequest",
+    "WebSearchResponse",
+    "WebSearchProvidersResponse",
+    "WebSearchCompressRequest",
+    "WebSearchCompressResponse",
+    # Elasticsearch
+    "IndexCreateRequest",
+    "IndexStatsResponse",
+    "IndexListResponse",
+    "DocumentIndexRequest",
+    "DocumentIndexBatchRequest",
+    "DocumentUpdateRequest",
+    "DocumentResponse",
+    "BulkOperationResponse",
+    "ElasticsearchSearchRequest",
+    "HybridSearchRequest",
+    "RawSearchRequest",
+    "ElasticsearchSearchResult",
+    "ElasticsearchSearchResponse",
+    "AnalyzeRequest",
+    "AnalyzeResponse",
+    "AnalyzeToken",
+    "ElasticsearchConfigResponse",
+    "ElasticsearchHealthResponse",
 ]

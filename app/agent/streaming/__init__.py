@@ -1,44 +1,48 @@
-"""流式输出模块
+"""LangGraph 流式处理模块
 
-提供 Agent 流式输出功能。
+提供流式处理、取消和继续支持。
 """
 
-from app.agent.streaming.state_manager import (
-    StateManager,
-    create_state_update,
-    state_update,
-)
-from app.agent.streaming.streaming import (
-    DoneEvent,
-    ErrorEvent,
-    StatusEvent,
+# 从原始 streaming.py 模块导入
+from app.agent.streaming.base import (
     StreamEvent,
-    StreamingAgent,
-    TokenEvent,
-    TokenStream,
-    ToolCallEvent,
-    collect_stream,
-    create_fastapi_streaming_response,
-    stream_agent_response,
-    stream_agent_sse,
+    StreamProcessor,
+    stream_events_from_graph,
+    stream_tokens_from_graph,
+)
+
+# 从 cancellation 模块导入取消相关功能
+from app.agent.streaming.cancellation import (
+    CancellableStreamProcessor,
+    CancellationToken,
+    SessionStoppedError,
+    is_session_stopped,
+    request_session_stop,
+    reset_session_stop,
+)
+
+# 从 continuation 模块导入继续功能
+from app.agent.streaming.continuation import (
+    ActiveStreamRegistry,
+    ContinuableStreamProcessor,
+    get_active_stream_registry,
 )
 
 __all__ = [
-    # State Manager
-    "StateManager",
-    "state_update",
-    "create_state_update",
-    # Streaming
+    # 原始流式处理
     "StreamEvent",
-    "TokenEvent",
-    "ToolCallEvent",
-    "ErrorEvent",
-    "StatusEvent",
-    "DoneEvent",
-    "TokenStream",
-    "StreamingAgent",
-    "collect_stream",
-    "create_fastapi_streaming_response",
-    "stream_agent_response",
-    "stream_agent_sse",
+    "StreamProcessor",
+    "stream_tokens_from_graph",
+    "stream_events_from_graph",
+    # 取消功能
+    "CancellableStreamProcessor",
+    "CancellationToken",
+    "SessionStoppedError",
+    "request_session_stop",
+    "is_session_stopped",
+    "reset_session_stop",
+    # 继续功能
+    "ActiveStreamRegistry",
+    "ContinuableStreamProcessor",
+    "get_active_stream_registry",
 ]

@@ -16,7 +16,7 @@ from app.agent import get_agent
 from app.agent.message_utils import extract_ai_content, format_messages_to_dict
 from app.agent.memory.context import get_context_manager
 from app.agent.state import create_state_from_input
-from app.auth.middleware import TenantIdDep
+from app.middleware import TenantIdDep
 from app.config.settings import get_settings
 from app.observability.logging import get_logger
 from app.rate_limit.limiter import RateLimit, limiter
@@ -24,12 +24,9 @@ from app.schemas.chat import (
     ChatRequest,
     ChatResponse,
     ChatHistoryResponse,
-    ContextStatsResponse,
     Message,
     SSEEvent,
     StreamChatRequest,
-    SearchProviderInfo,
-    SearchProvidersResponse,
     WebsearchConfig,
 )
 from app.services.session_service import resolve_effective_user_id
@@ -426,156 +423,3 @@ async def clear_chat_history(
     except Exception as e:
         logger.exception("clear_chat_history_failed", session_id=session_id)
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.get("/context/{session_id}/stats", response_model=ContextStatsResponse)
-@limiter.limit(RateLimit.API)
-async def get_context_stats(
-    session_id: str,
-    request: StarletteRequest,
-    tenant_id: TenantIdDep = None,
-) -> ContextStatsResponse:
-    """获取会话上下文统计
-
-    Args:
-        session_id: 会话 ID
-
-    Returns:
-        ContextStatsResponse: 上下文统计
-    """
-    try:
-        request_user_id = getattr(request.state, "user_id", None)
-        await _validate_session_access(
-            session_id=session_id,
-            user_id=str(request_user_id) if request_user_id is not None else None,
-            tenant_id=tenant_id,
-        )
-        context_manager = get_context_manager()
-        stats = await context_manager.get_stats(session_id)
-
-        return ContextStatsResponse(
-            session_id=stats["session_id"],
-            message_count=stats["message_count"],
-            token_estimate=stats["token_estimate"],
-            role_distribution=stats["role_distribution"],
-            exists=stats["exists"],
-        )
-
-    except Exception as e:
-        logger.exception("get_context_stats_failed", session_id=session_id)
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.delete("/context/{session_id}")
-@limiter.limit(RateLimit.API)
-async def clear_context(
-    session_id: str,
-    request: StarletteRequest,
-    tenant_id: TenantIdDep = None,
-) -> dict[str, str]:
-    """清除会话上下文（Redis 缓存）
-
-    Args:
-        session_id: 会话 ID
-
-    Returns:
-        操作结果
-    """
-    try:
-        request_user_id = getattr(request.state, "user_id", None)
-        await _validate_session_access(
-            session_id=session_id,
-            user_id=str(request_user_id) if request_user_id is not None else None,
-            tenant_id=tenant_id,
-        )
-        context_manager = get_context_manager()
-        await context_manager.clear_context(session_id)
-
-        return {"status": "success", "message": "会话上下文已清除"}
-
-    except Exception as e:
-        logger.exception("clear_context_failed", session_id=session_id)
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# ============== Search Providers Endpoints ==============
-
-
-@router.get("/search/providers", response_model=SearchProvidersResponse)
-@limiter.limit(RateLimit.API)
-async def get_search_providers(request: StarletteRequest) -> SearchProvidersResponse:
-    """获取可用的搜索提供商列表
-
-    类似 WeKnora 的 websearch 选择接口，返回当前可用的搜索引擎。
-
-    Returns:
-        SearchProvidersResponse: 搜索提供商列表
-    """
-    import os
-
-    providers = []
-
-    # DuckDuckGo
-    try:
-        from duckduckgo_search import DDGS  # noqa: F401
-
-        providers.append(
-            SearchProviderInfo(
-                name="duckduckgo",
-                display_name="DuckDuckGo",
-                available=True,
-                requires_api_key=False,
-                supported_depths=["basic"],
-                description="免费搜索引擎，无需 API Key",
-            )
-        )
-    except ImportError:
-        providers.append(
-            SearchProviderInfo(
-                name="duckduckgo",
-                display_name="DuckDuckGo",
-                available=False,
-                requires_api_key=False,
-                supported_depths=["basic"],
-                description="免费搜索引擎（未安装 duckduckgo-search）",
-            )
-        )
-
-    # Tavily
-    tavily_api_key = os.getenv("TAVILY_API_KEY")
-    try:
-        from tavily import TavilyClient  # noqa: F401
-
-        providers.append(
-            SearchProviderInfo(
-                name="tavily",
-                display_name="Tavily",
-                available=bool(tavily_api_key),
-                requires_api_key=True,
-                supported_depths=["basic", "advanced"],
-                description="专业搜索 API（需要 TAVILY_API_KEY）" if tavily_api_key else "未配置 API Key",
-            )
-        )
-    except ImportError:
-        providers.append(
-            SearchProviderInfo(
-                name="tavily",
-                display_name="Tavily",
-                available=False,
-                requires_api_key=True,
-                supported_depths=["basic", "advanced"],
-                description="未安装 tavily-python",
-            )
-        )
-
-    # 确定默认提供商
-    default_provider = "duckduckgo"
-    for p in providers:
-        if p.available:
-            default_provider = p.name
-            break
-
-    return SearchProvidersResponse(
-        providers=providers,
-        default_provider=default_provider,
-    )

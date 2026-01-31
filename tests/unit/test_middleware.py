@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import Request, Response
 
-from app.api.middleware import (
+from app.middleware import (
     ObservabilityMiddleware,
     RequestContextMiddleware,
 )
@@ -57,8 +57,8 @@ class TestObservabilityMiddleware:
         call_next.return_value.status_code = 200
         call_next.return_value.headers = {}
 
-        with patch("app.core.middleware.bind_context"):
-            with patch("app.core.middleware.logger") as mock_logger:
+        with patch("app.middleware.observability.bind_context"):
+            with patch("app.middleware.observability.logger") as mock_logger:
                 await mw.dispatch(request, call_next)
 
                 # 不应该记录日志（排除路径）
@@ -83,8 +83,8 @@ class TestObservabilityMiddleware:
 
         call_next = AsyncMock(return_value=response)
 
-        with patch("app.core.middleware.bind_context"):
-            with patch("app.core.middleware.clear_context"):
+        with patch("app.middleware.observability.bind_context"):
+            with patch("app.middleware.observability.clear_context"):
                 result = await mw.dispatch(request, call_next)
 
                 # 验证响应头被添加
@@ -105,9 +105,9 @@ class TestObservabilityMiddleware:
 
         call_next = AsyncMock(side_effect=ValueError("Test error"))
 
-        with patch("app.core.middleware.bind_context"):
-            with patch("app.core.middleware.logger") as mock_logger:
-                with patch("app.core.middleware.clear_context"):
+        with patch("app.middleware.observability.bind_context"):
+            with patch("app.middleware.observability.logger") as mock_logger:
+                with patch("app.middleware.observability.clear_context"):
                     with pytest.raises(ValueError):
                         await mw.dispatch(request, call_next)
 
@@ -130,7 +130,7 @@ class TestObservabilityMiddleware:
 
         call_next = AsyncMock(return_value=response)
 
-        with patch("app.core.middleware.bind_context"):
+        with patch("app.middleware.observability.bind_context"):
             with patch("app.core.middleware.clear_context") as mock_clear:
                 await mw.dispatch(request, call_next)
 
@@ -245,7 +245,7 @@ async def test_excluded_paths_not_logged(excluded_path: str) -> None:
     call_next.return_value.status_code = 200
     call_next.return_value.headers = {}
 
-    with patch("app.core.middleware.bind_context"):
+    with patch("app.middleware.observability.bind_context"):
         result = await middleware.dispatch(request, call_next)
         assert result is not None
 
@@ -271,6 +271,6 @@ async def test_request_context_variations(path: str, method: str) -> None:
 
     call_next = AsyncMock(return_value=MagicMock(spec=Response))
 
-    with patch("app.core.middleware.bind_context"):
+    with patch("app.middleware.observability.bind_context"):
         result = await middleware.dispatch(request, call_next)
         assert result is not None

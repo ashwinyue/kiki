@@ -226,8 +226,8 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     # 向量维度（text-embedding-v4 支持 64/128/256/512/768/1024/1536/2048）
     embedding_dimensions: int = 1024
-    # 向量存储类型: pgvector, pinecone, chroma, memory
-    vector_store_type: Literal["pgvector", "pinecone", "chroma", "memory"] = "memory"
+    # 向量存储类型: qdrant, pgvector, pinecone, chroma, memory
+    vector_store_type: Literal["qdrant", "pgvector", "pinecone", "chroma", "memory"] = "memory"
 
     # RAG 分块配置
     rag_chunk_size: int = 1000
@@ -235,9 +235,16 @@ class Settings(BaseSettings):
     rag_top_k: int = 5
     rag_score_threshold: float = 0.7
 
+    # Qdrant 配置
+    qdrant_url: str | None = None
+    qdrant_api_key: str | None = None
+    qdrant_path: str = "./data/qdrant"
+    qdrant_port: int = 6333
+
     # Pinecone 配置
     pinecone_api_key: str | None = None
     pinecone_index_name: str = "kiki"
+    pinecone_region: str = "us-east-1"
 
     # Chroma 配置
     chroma_persist_directory: str = "./data/chroma"

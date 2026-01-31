@@ -3,7 +3,10 @@
 提供消息相关的数据访问操作。
 """
 
-from sqlalchemy import desc, select
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import Message, MessageCreate
@@ -204,3 +207,108 @@ class MessageRepository(BaseRepository[Message]):
             消息数量
         """
         return await self.count(session_id=session_id)
+
+    async def load_messages_before(
+        self,
+        session_id: str,
+        before_message_id: str | None = None,
+        limit: int = 20,
+    ) -> list[Message]:
+        """加载指定消息之前的消息（分页加载）
+
+        对齐 WeKnora 的 GetMessagesBySessionBeforeTime 方法。
+
+        Args:
+            session_id: 会话 ID
+            before_message_id: 锚点消息 ID，加载此消息之前的消息
+            limit: 限制数量
+
+        Returns:
+            消息列表（按创建时间升序排列）
+        """
+        try:
+            # 获取锚点消息的创建时间
+            before_time: datetime | None = None
+            if before_message_id:
+                anchor_message = await self.get(before_message_id)
+                if anchor_message and anchor_message.session_id == session_id:
+                    before_time = anchor_message.created_at
+
+            # 构建查询
+            statement = select(Message).where(Message.session_id == session_id)
+
+            # 添加时间过滤条件
+            if before_time is not None:
+                statement = statement.where(Message.created_at < before_time)
+
+            # 按创建时间降序查询，获取最近的消息
+            statement = statement.order_by(desc(Message.created_at)).limit(limit)
+
+            result = await self.session.execute(statement)
+            messages = list(result.scalars().all())
+
+            # 反转列表，使其按时间升序排列
+            messages.reverse()
+
+            logger.info(
+                "message_repository_load_messages_before",
+                session_id=session_id,
+                before_message_id=before_message_id,
+                limit=limit,
+                count=len(messages),
+            )
+            return messages
+
+        except Exception as e:
+            logger.error(
+                "message_repository_load_messages_before_failed",
+                session_id=session_id,
+                before_message_id=before_message_id,
+                error=str(e),
+            )
+            return []
+
+    async def get_recent_messages(
+        self,
+        session_id: str,
+        limit: int = 20,
+    ) -> list[Message]:
+        """获取会话的最新消息
+
+        对齐 WeKnora 的 GetRecentMessagesBySession 方法。
+
+        Args:
+            session_id: 会话 ID
+            limit: 限制数量
+
+        Returns:
+            消息列表（按创建时间升序排列）
+        """
+        try:
+            statement = (
+                select(Message)
+                .where(Message.session_id == session_id)
+                .order_by(desc(Message.created_at))
+                .limit(limit)
+            )
+            result = await self.session.execute(statement)
+            messages = list(result.scalars().all())
+
+            # 反转列表，使其按时间升序排列
+            messages.reverse()
+
+            logger.info(
+                "message_repository_get_recent_messages",
+                session_id=session_id,
+                limit=limit,
+                count=len(messages),
+            )
+            return messages
+
+        except Exception as e:
+            logger.error(
+                "message_repository_get_recent_messages_failed",
+                session_id=session_id,
+                error=str(e),
+            )
+            return []

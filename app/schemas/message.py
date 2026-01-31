@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 class MessageResponse(BaseModel):
     """消息响应"""
 
-    id: int = Field(..., description="消息 ID")
+    id: str = Field(..., description="消息 ID")
     session_id: str = Field(..., description="会话 ID")
     role: str = Field(..., description="角色：user/assistant/system/tool")
     content: str = Field(..., description="消息内容")
@@ -53,3 +53,17 @@ class MessageSearchResponse(BaseModel):
     items: list[MessageResponse] = Field(default_factory=list, description="匹配的消息列表")
     total: int = Field(..., description="总数")
     query: str = Field(..., description="搜索关键词")
+
+
+class MessageLoadRequest(BaseModel):
+    """消息加载请求"""
+
+    message_id: str | None = Field(None, description="锚点消息 ID，加载此消息之前的消息")
+    limit: int = Field(20, ge=1, le=100, description="加载数量限制")
+
+
+class MessageLoadResponse(BaseModel):
+    """消息加载响应"""
+
+    items: list[MessageResponse] = Field(default_factory=list, description="消息列表")
+    has_more: bool = Field(..., description="是否还有更多消息")

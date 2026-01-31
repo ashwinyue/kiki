@@ -74,15 +74,15 @@ class TestLangGraphAgent:
         mock_llm.current_model = "gpt-4o"
         mock_get_llm.return_value = mock_llm
 
-        with patch("app.agent.agent.ChatGraph") as mock_graph_class:
+        with patch("app.agent.agent.compile_chat_graph") as mock_compile:
             mock_graph = MagicMock()
-            mock_graph_class.return_value = mock_graph
+            mock_compile.return_value = mock_graph
 
             agent = LangGraphAgent()
             graph = agent._get_graph()
 
             assert graph is mock_graph
-            mock_graph_class.assert_called_once()
+            mock_compile.assert_called_once()
 
     @patch("app.agent.agent.get_llm_service")
     @patch("app.agent.agent._postgres_available", False)

@@ -27,12 +27,23 @@ from app.models.tenant import (
 )
 
 # ============== 会话 ==============
+from app.models.memory import (
+    Memory,
+    MemoryCreate,
+    MemoryPublic,
+    MemoryUpdate,
+)
 from app.models.session import (
     ChatSession,
     Session,
     SessionCreate,
     SessionPublic,
     SessionUpdate,
+)
+from app.models.thread import (
+    Thread,
+    ThreadCreate,
+    ThreadPublic,
 )
 
 # ============== 消息 ==============
@@ -107,6 +118,15 @@ __all__ = [
     "SessionCreate",
     "SessionUpdate",
     "SessionPublic",
+    # 线程
+    "Thread",
+    "ThreadCreate",
+    "ThreadPublic",
+    # 长期记忆
+    "Memory",
+    "MemoryCreate",
+    "MemoryUpdate",
+    "MemoryPublic",
     # 消息
     "Message",
     "MessageCreate",

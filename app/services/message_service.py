@@ -16,7 +16,11 @@ from app.infra.database import message_repository, session_repository
 from app.models.database import Message, MessageCreate, MessageUpdate as MessageUpdateModel
 from app.observability.logging import get_logger
 from app.repositories.base import PaginatedResult, PaginationParams
-from app.schemas.message import MessageRegenerateRequest, MessageUpdate as MessageUpdateSchema
+from app.schemas.message import (
+    MessageLoadRequest,
+    MessageRegenerateRequest,
+    MessageUpdate as MessageUpdateSchema,
+)
 
 logger = get_logger(__name__)
 
@@ -36,7 +40,7 @@ class MessageService:
 
     async def get_message(
         self,
-        message_id: int,
+        message_id: str,
         session_id: str | None = None,
         user_id: int | None = None,
         tenant_id: int | None = None,
@@ -74,7 +78,7 @@ class MessageService:
 
     async def get_message_or_404(
         self,
-        message_id: int,
+        message_id: str,
         session_id: str | None = None,
         user_id: int | None = None,
         tenant_id: int | None = None,
@@ -133,7 +137,7 @@ class MessageService:
 
     async def update_message(
         self,
-        message_id: int,
+        message_id: str,
         data: MessageUpdateSchema,
         regenerate_request: MessageRegenerateRequest | None = None,
         user_id: int | None = None,
@@ -197,7 +201,7 @@ class MessageService:
 
     async def delete_message(
         self,
-        message_id: int,
+        message_id: str,
         user_id: int | None = None,
         tenant_id: int | None = None,
     ) -> bool:
@@ -304,3 +308,62 @@ class MessageService:
             raise HTTPException(status_code=403, detail="Session tenant mismatch")
 
         return await self.message_repo.delete_by_session(session_id)
+
+    async def load_messages(
+        self,
+        session_id: str,
+        request: MessageLoadRequest,
+        user_id: int | None = None,
+        tenant_id: int | None = None,
+    ) -> tuple[list[Message], bool]:
+        """分页加载会话消息
+
+        对齐 WeKnora 的 LoadMessages API。
+        如果提供了 message_id，加载该消息之前的消息；
+        否则加载最新的消息。
+
+        Args:
+            session_id: 会话 ID
+            request: 加载请求参数
+            user_id: 用户 ID
+            tenant_id: 租户 ID
+
+        Returns:
+            (消息列表, 是否还有更多消息)
+        """
+        # 验证会话访问权限
+        session_obj = await self.session_repo.get(session_id)
+        if session_obj is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if user_id is not None and session_obj.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Session access denied")
+        if tenant_id is not None and session_obj.tenant_id is not None and session_obj.tenant_id != tenant_id:
+            raise HTTPException(status_code=403, detail="Session tenant mismatch")
+
+        # 获取消息
+        if request.message_id:
+            messages = await self.message_repo.load_messages_before(
+                session_id,
+                before_message_id=request.message_id,
+                limit=request.limit,
+            )
+        else:
+            messages = await self.message_repo.get_recent_messages(
+                session_id,
+                limit=request.limit,
+            )
+
+        # 判断是否还有更多消息
+        has_more = len(messages) >= request.limit
+
+        logger.info(
+            "messages_loaded",
+            session_id=session_id,
+            message_id=request.message_id,
+            limit=request.limit,
+            count=len(messages),
+            has_more=has_more,
+        )
+
+        return messages, has_more

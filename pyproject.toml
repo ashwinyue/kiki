@@ -24,6 +24,8 @@ dependencies = [
     "langchain-core>=0.3.0",
     "langchain-openai>=0.2.0",
     "langchain-community>=0.3.0",
+    "langchain>=1.2.7",
+    "langchain-text-splitters>=0.3.0",
     # Database
     "sqlmodel>=0.0.24",
     "asyncpg>=0.30.0",
@@ -40,19 +42,37 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "redis>=5.0.0",
     "hiredis>=2.0.0",
+    # Celery 任务队列 (对齐 WeKnora asynq)
+    "celery[redis]>=5.4.0",
+    "flower>=2.0.0",  # Celery 监控面板
     "orjson>=3.10.0", # 高性能 JSON 序列化
     "langchain>=1.2.7",
     "slowapi>=0.1.9",
     "limits>=5.6.0",
     "email-validator>=2.3.0",
-    "aiofiles>=24.1.0",  # 异步文件操作（审计日志持久化）
+    "aiofiles>=24.1.0", # 异步文件操作（审计日志持久化）
+    "httpx>=0.28.0", # HTTP 客户端（网络搜索）
     # RAG / Embedding
     "dashscope>=1.20.0",
+    # 文档处理
+    "pypdf>=5.0.0",
+    "pymupdf>=1.24.0", # 高性能 PDF 处理
+    # "unstructured>=0.15.0",  # 暂时禁用 - Python 3.13 兼容性问题
+    "beautifulsoup4>=4.12.0", # 网页解析
+    "lxml>=5.0.0", # XML/HTML 解析
+    "python-pptx>=1.0.0", # PowerPoint 支持
+    "python-docx>=1.1.0", # Word 支持
+    "openpyxl>=3.1.0", # Excel 支持
+    "pillow>=11.0.0", # 图片处理
+    "unstructured-client>=0.20.0", # unstructured API 客户端（可选）
+    # 向量存储可选依赖
     # 模板引擎
     "jinja2>=3.1.0",
     # 代码执行
     "langchain-experimental>=0.0.60",
     "cryptography>=46.0.4",
+    "langchain-elasticsearch>=1.0.0",
+    "elasticsearch[async]>=8.0.0",
 ]
 
 [project.optional-dependencies]
@@ -66,6 +86,9 @@ dev = [
 ]
 
 # 向量存储可选依赖
+qdrant = [
+    "qdrant-client>=1.12.0",
+]
 pgvector = [
     "langchain-postgres>=0.0.12",
     "pgvector>=0.3.0",
@@ -78,9 +101,19 @@ chroma = [
     "langchain-chroma>=0.1.0",
     "chromadb>=0.5.0",
 ]
+elasticsearch = [
+    "langchain-elasticsearch>=1.0.0",
+    "elasticsearch[async]>=8.0.0",
+]
+
+# 网络搜索可选依赖
+websearch = [
+    "duckduckgo-search>=6.0.0",
+    "tavily-python>=0.5.0",
+]
 
 all = [
-    "kiki-agent[dev,pgvector,pinecone,chroma]",
+    "kiki-agent[dev,qdrant,pgvector,pinecone,chroma,elasticsearch,websearch]",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -120,6 +153,7 @@ markers = [
     "unit: 标记单元测试",
     "e2e: 标记端到端测试",
     "redis: 标记需要 Redis 的测试",
+    "celery: 标记需要 Celery 的测试",
     "postgres: 标记需要 PostgreSQL 的测试",
     "llm: 标记需要真实 LLM API 的测试",
     "skip_ci: 在 CI 环境中跳过",

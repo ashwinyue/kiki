@@ -31,14 +31,14 @@ Kiki 提供三种多 Agent 协作模式：
 根据用户咨询类型（销售、售后、技术）路由到不同的专业 Agent。
 
 ```python
-from app.agent import AgentGraph
+from app.agent.graph import compile_chat_graph
 from app.agent.multi_agent import RouterAgent
 from app.llm import LLMService
 
 llm_service = LLMService()
 
 # 创建专业 Agent
-sales_agent = AgentGraph(
+sales_agent = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="""你是销售专家，负责：
 - 产品推荐
@@ -48,7 +48,7 @@ sales_agent = AgentGraph(
 沟通风格：热情、专业"""
 )
 
-support_agent = AgentGraph(
+support_agent = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="""你是客服专家，负责：
 - 订单查询
@@ -58,7 +58,7 @@ support_agent = AgentGraph(
 沟通风格：耐心、细致"""
 )
 
-tech_agent = AgentGraph(
+tech_agent = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="""你是技术专家，负责：
 - 产品使用指导
@@ -117,14 +117,14 @@ async def test_router():
 由监督者协调研究员、写手、审核员完成报告撰写。
 
 ```python
-from app.agent import AgentGraph
+from app.agent.graph import compile_chat_graph
 from app.agent.multi_agent import SupervisorAgent
 from app.llm import LLMService
 
 llm_service = LLMService()
 
 # 创建 Worker Agent
-researcher = AgentGraph(
+researcher = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="""你是研究员，负责：
 1. 收集主题相关的最新信息
@@ -134,7 +134,7 @@ researcher = AgentGraph(
 输出格式：结构化的研究报告"""
 )
 
-writer = AgentGraph(
+writer = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="""你是写手，负责：
 1. 根据研究员的素材撰写报告
@@ -144,7 +144,7 @@ writer = AgentGraph(
 输出格式：完整的报告文档"""
 )
 
-reviewer = AgentGraph(
+reviewer = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="""你是审核员，负责：
 1. 检查报告的准确性和完整性
@@ -192,26 +192,26 @@ async def test_supervisor():
 模拟真实的软件开发流程。
 
 ```python
-from app.agent import AgentGraph
+from app.agent.graph import compile_chat_graph
 from app.agent.multi_agent import SupervisorAgent
 
 # 创建开发团队成员
-product_manager = AgentGraph(
+product_manager = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是产品经理，负责需求分析和验收标准"
 )
 
-designer = AgentGraph(
+designer = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是 UI/UX 设计师，负责界面设计和交互流程"
 )
 
-developer = AgentGraph(
+developer = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是开发工程师，负责代码实现"
 )
 
-qa_engineer = AgentGraph(
+qa_engineer = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是 QA 工程师，负责测试和质量保证"
 )
@@ -354,7 +354,7 @@ app/
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.agent import AgentGraph
+from app.agent.graph import compile_chat_graph
 from app.agent.multi_agent import RouterAgent, SupervisorAgent, HandoffAgent, create_swarm
 from app.llm import get_llm_service
 from langchain_core.tools import tool
@@ -377,16 +377,14 @@ async def check_order(order_id: str) -> str:
 
 # ============== 定义 Agent ==============
 
-sales_agent = AgentGraph(
+sales_agent = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是销售专家",
-    tools=[search_products],
 )
 
-support_agent = AgentGraph(
+support_agent = compile_chat_graph(
     llm_service=llm_service,
     system_prompt="你是客服专家",
-    tools=[check_order],
 )
 
 # ============== 创建多 Agent 系统 ==============
@@ -477,6 +475,7 @@ curl -X POST "http://localhost:8000/api/v1/multi-chat/chat?system_type=swarm&mes
 根据 Agent 角色动态加载工具：
 
 ```python
+from app.agent.graph import create_react_agent
 from app.agent.tools import alist_tools
 
 async def get_tools_for_role(role: str):
@@ -495,7 +494,7 @@ async def get_tools_for_role(role: str):
 # 创建带动态工具的 Agent
 async def create_dynamic_agent(role: str):
     tools = await get_tools_for_role(role)
-    return AgentGraph(
+    return create_react_agent(
         llm_service=llm_service,
         system_prompt=f"你是 {role} 专家",
         tools=tools,

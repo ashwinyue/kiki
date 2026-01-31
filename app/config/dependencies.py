@@ -5,14 +5,17 @@
 
 from collections.abc import AsyncIterator
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
-from app.agent import LangGraphAgent
-from app.agent.memory.base import BaseLongTermMemory
-from app.agent.memory.manager import MemoryManager, MemoryManagerFactory
 from app.config.settings import Settings, get_settings
-from app.agent.memory.context import ContextManager
 from app.llm import LLMService
 from app.observability.logging import get_logger
+
+if TYPE_CHECKING:
+    from app.agent import LangGraphAgent
+    from app.agent.memory.base import BaseLongTermMemory
+    from app.agent.memory.context import ContextManager
+    from app.agent.memory.manager import MemoryManager, MemoryManagerFactory
 
 logger = get_logger(__name__)
 
@@ -52,14 +55,14 @@ class AgentContainer:
     """
 
     def __init__(self) -> None:
-        self._agents: dict[str, LangGraphAgent] = {}
-        self._default_agent: LangGraphAgent | None = None
+        self._agents: dict[str, "LangGraphAgent"] = {}
+        self._default_agent: "LangGraphAgent | None" = None
 
     async def get_agent(
         self,
         session_id: str | None = None,
         user_id: str | None = None,
-    ) -> LangGraphAgent:
+    ) -> "LangGraphAgent":
         """获取 Agent 实例
 
         Args:
@@ -114,7 +117,7 @@ _agent_container = AgentContainer()
 async def get_agent_dep(
     session_id: str | None = None,
     user_id: str | None = None,
-) -> AsyncIterator[LangGraphAgent]:
+) -> AsyncIterator["LangGraphAgent"]:
     """Agent 依赖注入提供者
 
     Args:
@@ -148,8 +151,8 @@ async def get_agent_dep(
 async def get_memory_manager_dep(
     session_id: str,
     user_id: str | None = None,
-    long_term_memory: BaseLongTermMemory | None = None,
-) -> AsyncIterator[MemoryManager]:
+    long_term_memory: "BaseLongTermMemory | None" = None,
+) -> AsyncIterator["MemoryManager"]:
     """Memory Manager 依赖注入提供者
 
     Args:
@@ -184,7 +187,7 @@ async def get_memory_manager_dep(
 # ============== Memory Manager Factory ==============
 
 
-def get_memory_manager_factory_dep() -> MemoryManagerFactory:
+def get_memory_manager_factory_dep() -> "MemoryManagerFactory":
     """Memory Manager 工厂依赖注入提供者
 
     Returns:
@@ -207,7 +210,7 @@ def get_memory_manager_factory_dep() -> MemoryManagerFactory:
 # ============== Context Manager ==============
 
 
-def get_context_manager_dep() -> ContextManager:
+def get_context_manager_dep() -> "ContextManager":
     """Context Manager 依赖注入提供者
 
     Returns:

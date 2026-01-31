@@ -348,10 +348,9 @@ logger.debug(
 ### 2. 可视化图结构
 
 ```python
-from app.agent.graphs import ChatGraph
+from app.agent.graph import compile_chat_graph
 
-graph = ChatGraph()
-compiled = graph.compile()
+compiled = compile_chat_graph()
 
 # 打印图结构
 print(compiled.get_graph().print_ascii())

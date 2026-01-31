@@ -5,12 +5,10 @@
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
 
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Column, Field, SQLModel
-
 
 # ============== 枚举类型 ==============
 

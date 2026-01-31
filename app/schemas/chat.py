@@ -65,16 +65,6 @@ class ChatHistoryResponse(BaseModel):
     session_id: str = Field(..., description="会话 ID")
 
 
-class ContextStatsResponse(BaseModel):
-    """上下文统计响应"""
-
-    session_id: str
-    message_count: int
-    token_estimate: int
-    role_distribution: dict[str, int]
-    exists: bool
-
-
 class SSEEvent(BaseModel):
     """SSE 事件模型"""
 
@@ -91,21 +81,3 @@ class SSEEvent(BaseModel):
 
         data_str = json.dumps(self.data, ensure_ascii=False)
         return f"event: {self.event}\\ndata: {data_str}\\n\\n"
-
-
-class SearchProviderInfo(BaseModel):
-    """搜索提供商信息"""
-
-    name: str = Field(..., description="提供商名称")
-    display_name: str = Field(..., description="显示名称")
-    available: bool = Field(..., description="是否可用")
-    requires_api_key: bool = Field(False, description="是否需要 API Key")
-    supported_depths: list[str] = Field(default_factory=list, description="支持的搜索深度")
-    description: str = Field(..., description="描述")
-
-
-class SearchProvidersResponse(BaseModel):
-    """搜索提供商列表响应"""
-
-    providers: list[SearchProviderInfo] = Field(default_factory=list, description="提供商列表")
-    default_provider: str = Field(..., description="默认提供商")
