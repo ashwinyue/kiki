@@ -21,7 +21,7 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
-from app.observability import sanitize_log_input, sanitize_tool_name
+from app.observability.log_sanitizer import sanitize_log_input, sanitize_tool_name
 
 logger = logging.getLogger(__name__)
 

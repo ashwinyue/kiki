@@ -6,121 +6,88 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncIterator
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 from starlette.requests import Request as StarletteRequest
 
 from app.agent import get_agent
-from app.agent.state import create_state_from_input
-from app.config.settings import get_settings
-from app.rate_limit.limiter import RateLimit, limiter
+from app.agent.message_utils import extract_ai_content, format_messages_to_dict
 from app.agent.memory.context import get_context_manager
+from app.agent.state import create_state_from_input
 from app.auth.middleware import TenantIdDep
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
-from app.infra.database import session_repository, session_scope
+from app.rate_limit.limiter import RateLimit, limiter
+from app.schemas.chat import (
+    ChatRequest,
+    ChatResponse,
+    ChatHistoryResponse,
+    ContextStatsResponse,
+    Message,
+    SSEEvent,
+    StreamChatRequest,
+    SearchProviderInfo,
+    SearchProvidersResponse,
+    WebsearchConfig,
+)
+from app.services.session_service import resolve_effective_user_id
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
-# ============== Request/Response Models ==============
+# ============== 辅助函数 ==============
 
-
-class ChatRequest(BaseModel):
-    """聊天请求"""
-
-    message: str = Field(..., description="用户消息", min_length=1)
-    session_id: str = Field(..., description="会话 ID")
-    user_id: str | None = Field(None, description="用户 ID")
-
-
-class StreamChatRequest(ChatRequest):
-    """流式聊天请求"""
-
-    stream_mode: str = Field(
-        "messages", description="流式模式: messages(令牌级), updates(状态更新), values(完整状态)"
-    )
-
-
-class ContextStatsResponse(BaseModel):
-    """上下文统计响应"""
-
-    session_id: str
-    message_count: int
-    token_estimate: int
-    role_distribution: dict[str, int]
-    exists: bool
-
-
-class ChatResponse(BaseModel):
-    """聊天响应"""
-
-    content: str = Field(..., description="响应内容")
-    session_id: str = Field(..., description="会话 ID")
-
-
-class Message(BaseModel):
-    """消息"""
-
-    role: str = Field(..., description="角色：user/assistant/system")
-    content: str = Field(..., description="消息内容")
-
-
-class ChatHistoryResponse(BaseModel):
-    """聊天历史响应"""
-
-    messages: list[Message] = Field(default_factory=list, description="历史消息")
-    session_id: str = Field(..., description="会话 ID")
-
-
-# ============== SSE Event Models ==============
-
-
-class SSEEvent(BaseModel):
-    """SSE 事件模型"""
-
-    event: str = Field(default="message", description="事件类型")
-    data: dict[str, Any] = Field(..., description="事件数据")
-
-    def format(self) -> str:
-        """格式化为 SSE 格式
-
-        Returns:
-            SSE 格式字符串
-        """
-        data_str = json.dumps(self.data, ensure_ascii=False)
-        return f"event: {self.event}\ndata: {data_str}\n\n"
 
 async def _validate_session_access(
     session_id: str,
     user_id: str | None,
     tenant_id: int | None,
 ) -> None:
-    """验证会话是否存在，并可选校验用户/租户归属"""
-    async with session_scope() as session:
-        repo = session_repository(session)
-        session_obj = await repo.get(session_id)
-        if session_obj is None:
-            raise HTTPException(status_code=404, detail="Session not found")
+    """验证会话访问权限
 
-        if user_id is not None:
-            try:
-                user_id_int = int(user_id)
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail="Invalid user_id") from exc
+    Args:
+        session_id: 会话 ID
+        user_id: 用户 ID
+        tenant_id: 租户 ID
 
-            if session_obj.user_id != user_id_int:
-                raise HTTPException(status_code=403, detail="Session access denied")
+    Raises:
+        HTTPException: 会话不存在或无权访问
+    """
+    from app.infra.database import session_scope
+    from app.services.session_service import SessionService
 
-        if tenant_id is not None and session_obj.tenant_id is not None:
-            if session_obj.tenant_id != tenant_id:
-                raise HTTPException(status_code=403, detail="Session tenant mismatch")
+    async with session_scope() as db_session:
+        service = SessionService(db_session)
+        await service.validate_session_access(
+            session_id,
+            user_id=int(user_id) if user_id else None,
+            tenant_id=tenant_id,
+        )
+
+
+def _prepare_websearch_config(
+    websearch: WebsearchConfig | None,
+) -> dict[str, str | int] | None:
+    """准备 Web 搜索配置
+
+    Args:
+        websearch: Web 搜索配置
+
+    Returns:
+        配置字典或 None
+    """
+    if websearch and websearch.enable:
+        return {
+            "provider": websearch.provider,
+            "search_depth": websearch.search_depth,
+            "max_results": websearch.max_results,
+        }
+    return None
+
 
 # ============== Chat Endpoints ==============
 
@@ -141,16 +108,8 @@ async def chat(
         ChatResponse: 聊天响应
     """
     try:
-        effective_user_id = request.user_id
         state_user_id = getattr(http_request.state, "user_id", None)
-        if (
-            state_user_id is not None
-            and effective_user_id is not None
-            and str(state_user_id) != str(effective_user_id)
-        ):
-            raise HTTPException(status_code=403, detail="User mismatch")
-        if state_user_id is not None and effective_user_id is None:
-            effective_user_id = str(state_user_id)
+        effective_user_id = resolve_effective_user_id(request.user_id, state_user_id)
 
         await _validate_session_access(
             session_id=request.session_id,
@@ -159,19 +118,25 @@ async def chat(
         )
         agent = await get_agent()
 
+        # 准备 websearch 配置
+        websearch_config = _prepare_websearch_config(request.websearch)
+        if websearch_config:
+            logger.info(
+                "websearch_enabled",
+                provider=websearch_config["provider"],
+                search_depth=websearch_config["search_depth"],
+            )
+
         messages = await agent.get_response(
             message=request.message,
             session_id=request.session_id,
             user_id=effective_user_id,
             tenant_id=tenant_id,
+            websearch_config=websearch_config,
         )
 
         # 获取最后一条 AI 消息
-        content = ""
-        for msg in reversed(messages):
-            if msg.type == "ai":
-                content = msg.content
-                break
+        content = extract_ai_content(messages)
 
         return ChatResponse(content=content, session_id=request.session_id)
 
@@ -200,39 +165,24 @@ async def chat_stream(
 
     Returns:
         StreamingResponse: SSE 流式响应
-
-    Examples:
-        ```python
-        import requests
-
-        response = requests.post(
-            "http://localhost:8000/api/v1/chat/stream",
-            json={"message": "你好", "session_id": "test-123"},
-            stream=True
-        )
-
-        for line in response.iter_lines():
-            if line:
-                print(line.decode())
-        ```
     """
-
-    effective_user_id = request.user_id
     state_user_id = getattr(http_request.state, "user_id", None)
-    if (
-        state_user_id is not None
-        and effective_user_id is not None
-        and str(state_user_id) != str(effective_user_id)
-    ):
-        raise HTTPException(status_code=403, detail="User mismatch")
-    if state_user_id is not None and effective_user_id is None:
-        effective_user_id = str(state_user_id)
+    effective_user_id = resolve_effective_user_id(request.user_id, state_user_id)
 
     await _validate_session_access(
         session_id=request.session_id,
         user_id=effective_user_id,
         tenant_id=tenant_id,
     )
+
+    # 准备 websearch 配置
+    websearch_config = _prepare_websearch_config(request.websearch)
+    if websearch_config:
+        logger.info(
+            "websearch_enabled",
+            provider=websearch_config["provider"],
+            search_depth=websearch_config["search_depth"],
+        )
 
     async def event_generator() -> AsyncIterator[str]:
         """生成 SSE 事件流"""
@@ -246,6 +196,13 @@ async def chat_stream(
                 user_id=effective_user_id,
                 session_id=request.session_id,
             )
+
+            # 添加 websearch 配置到输入数据
+            if websearch_config:
+                if hasattr(input_data, "websearch_config"):
+                    input_data.websearch_config = websearch_config
+                else:
+                    input_data["websearch_config"] = websearch_config
 
             # 准备配置
             from langgraph.types import RunnableConfig
@@ -266,13 +223,18 @@ async def chat_stream(
             except Exception:
                 pass
 
+            # 构建 metadata（包含 websearch 配置）
+            metadata = {
+                "user_id": effective_user_id,
+                "session_id": request.session_id,
+                "tenant_id": tenant_id,
+            }
+            if websearch_config:
+                metadata["websearch"] = websearch_config
+
             config = RunnableConfig(
                 configurable={"thread_id": request.session_id},
-                metadata={
-                    "user_id": effective_user_id,
-                    "session_id": request.session_id,
-                    "tenant_id": tenant_id,
-                },
+                metadata=metadata,
                 callbacks=callbacks or None,
             )
 
@@ -534,3 +496,86 @@ async def clear_context(
     except Exception as e:
         logger.exception("clear_context_failed", session_id=session_id)
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# ============== Search Providers Endpoints ==============
+
+
+@router.get("/search/providers", response_model=SearchProvidersResponse)
+@limiter.limit(RateLimit.API)
+async def get_search_providers(request: StarletteRequest) -> SearchProvidersResponse:
+    """获取可用的搜索提供商列表
+
+    类似 WeKnora 的 websearch 选择接口，返回当前可用的搜索引擎。
+
+    Returns:
+        SearchProvidersResponse: 搜索提供商列表
+    """
+    import os
+
+    providers = []
+
+    # DuckDuckGo
+    try:
+        from duckduckgo_search import DDGS  # noqa: F401
+
+        providers.append(
+            SearchProviderInfo(
+                name="duckduckgo",
+                display_name="DuckDuckGo",
+                available=True,
+                requires_api_key=False,
+                supported_depths=["basic"],
+                description="免费搜索引擎，无需 API Key",
+            )
+        )
+    except ImportError:
+        providers.append(
+            SearchProviderInfo(
+                name="duckduckgo",
+                display_name="DuckDuckGo",
+                available=False,
+                requires_api_key=False,
+                supported_depths=["basic"],
+                description="免费搜索引擎（未安装 duckduckgo-search）",
+            )
+        )
+
+    # Tavily
+    tavily_api_key = os.getenv("TAVILY_API_KEY")
+    try:
+        from tavily import TavilyClient  # noqa: F401
+
+        providers.append(
+            SearchProviderInfo(
+                name="tavily",
+                display_name="Tavily",
+                available=bool(tavily_api_key),
+                requires_api_key=True,
+                supported_depths=["basic", "advanced"],
+                description="专业搜索 API（需要 TAVILY_API_KEY）" if tavily_api_key else "未配置 API Key",
+            )
+        )
+    except ImportError:
+        providers.append(
+            SearchProviderInfo(
+                name="tavily",
+                display_name="Tavily",
+                available=False,
+                requires_api_key=True,
+                supported_depths=["basic", "advanced"],
+                description="未安装 tavily-python",
+            )
+        )
+
+    # 确定默认提供商
+    default_provider = "duckduckgo"
+    for p in providers:
+        if p.available:
+            default_provider = p.name
+            break
+
+    return SearchProvidersResponse(
+        providers=providers,
+        default_provider=default_provider,
+    )

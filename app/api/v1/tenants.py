@@ -3,7 +3,6 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 
 from app.auth.middleware import (
     require_tenant,
@@ -12,28 +11,10 @@ from app.auth.middleware import (
 from app.models.database import Tenant, TenantCreate, TenantPublic, TenantUpdate
 from app.services.tenant import TenantService
 from app.infra.database import get_session
+from app.schemas.tenant import ApiKeyResponse, TenantListResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
-
-
-# ============== 响应模型 ==============
-
-
-class TenantListResponse(BaseModel):
-    """租户列表响应"""
-
-    items: list[TenantPublic]
-    total: int
-    page: int = 1
-    size: int = 20
-
-
-class ApiKeyResponse(BaseModel):
-    """API Key 响应"""
-
-    api_key: str
-    tenant_id: int
 
 
 # ============== 管理端点 ==============

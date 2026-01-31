@@ -23,7 +23,7 @@ from typing import Any, Callable
 from langchain_core.tools import BaseTool
 from langgraph.types import interrupt
 
-from app.observability import (
+from app.observability.log_sanitizer import (
     sanitize_agent_name,
     sanitize_log_input,
     sanitize_tool_name,

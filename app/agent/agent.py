@@ -147,6 +147,7 @@ class LangGraphAgent:
         session_id: str,
         user_id: str | None = None,
         tenant_id: int | None = None,
+        websearch_config: dict | None = None,
     ) -> list[BaseMessage]:
         """获取 Agent 响应
 
@@ -154,6 +155,8 @@ class LangGraphAgent:
             message: 用户消息
             session_id: 会话 ID（用于状态持久化）
             user_id: 用户 ID
+            tenant_id: 租户 ID
+            websearch_config: Web 搜索配置
 
         Returns:
             响应消息列表
@@ -183,13 +186,18 @@ class LangGraphAgent:
         except Exception:
             pass
 
+        # 构建 metadata（包含 websearch 配置）
+        metadata = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "tenant_id": tenant_id,
+        }
+        if websearch_config:
+            metadata["websearch"] = websearch_config
+
         config = RunnableConfig(
             configurable={"thread_id": session_id},
-            metadata={
-                "user_id": user_id,
-                "session_id": session_id,
-                "tenant_id": tenant_id,
-            },
+            metadata=metadata,
             callbacks=callbacks or None,
         )
 

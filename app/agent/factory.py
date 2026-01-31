@@ -522,3 +522,92 @@ def create_agent(
         config=config,
         **kwargs,
     )
+
+
+# ============== API 层便捷函数 ==============
+
+
+def create_api_agent_node(agent_config: Any) -> callable:
+    """为 API 层创建 Agent 节点函数
+
+    Args:
+        agent_config: Agent 配置（来自 API schemas）
+
+    Returns:
+        Agent 节点函数
+    """
+    from app.agent.message_utils import get_last_user_message
+
+    llm_service = get_llm_service()
+
+    # 获取指定的工具
+    all_tools = {t.name: t for t in list_tools()}
+    agent_tools = [
+        all_tools[name]
+        for name in agent_config.tools
+        if name in all_tools
+    ]
+
+    # 使用 create_react_agent 创建 Agent
+    react_agent = create_react_agent(
+        llm_service=llm_service,
+        tools=agent_tools,
+        system_prompt=agent_config.system_prompt or None,
+    )
+
+    async def agent_node(state: dict, config) -> dict:
+        """Agent 节点包装函数"""
+        # 获取最后一条用户消息
+        user_message = get_last_user_message(state["messages"])
+
+        # 调用 Agent
+        messages = await react_agent.get_response(
+            message=user_message,
+            session_id=config.get("configurable", {}).get("thread_id", "default"),
+            user_id=state.get("user_id"),
+        )
+
+        # 获取响应
+        content = ""
+        for msg in reversed(messages):
+            if msg.type == "ai":
+                content = msg.content
+                break
+
+        from langchain_core.messages import AIMessage
+
+        return {"messages": [AIMessage(content=content)]}
+
+    return agent_node
+
+
+def create_api_handoff_agent(
+    config: Any,
+    handoff_targets: list[str],
+) -> HandoffAgent:
+    """为 API 层创建可切换的 Handoff Agent
+
+    Args:
+        config: Agent 配置（来自 API schemas）
+        handoff_targets: 可切换的目标列表
+
+    Returns:
+        HandoffAgent 实例
+    """
+    llm_service = get_llm_service()
+
+    # 获取指定的工具
+    all_tools = {t.name: t for t in list_tools()}
+    agent_tools = [
+        all_tools[name]
+        for name in config.tools
+        if name in all_tools
+    ]
+
+    return HandoffAgent(
+        name=config.name,
+        llm_service=llm_service,
+        tools=agent_tools,
+        handoff_targets=handoff_targets,
+        system_prompt=config.system_prompt or None,
+    )

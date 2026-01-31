@@ -25,7 +25,7 @@ import httpx
 from langchain_core.tools import tool
 
 from app.agent.tools.search_postprocessor import is_pdf_url, is_valid_url
-from app.observability import sanitize_log_input
+from app.observability.log_sanitizer import sanitize_log_input
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

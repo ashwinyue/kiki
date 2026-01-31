@@ -1,10 +1,9 @@
 # Kiki Agent Makefile
-# 本地开发模式: 依赖服务用 Docker，前后端应用本地启动
+# 企业级 Agent 开发脚手架
 
-.PHONY: help dev dev-deps dev-backend dev-frontend dev-all
+.PHONY: help dev dev-deps dev-backend
 .PHONY: docker-up docker-down docker-logs docker-clean
-.PHONY: backend-install backend-run backend-test backend-lint backend-shell
-.PHONY: frontend-install frontend-run frontend-build frontend-lint
+.PHONY: backend-install backend-run backend-test backend-lint backend-shell backend-format
 .PHONY: db-shell redis-shell test clean
 .PHONY: obs-up obs-down obs-logs obs-status kibana prometheus grafana
 
@@ -26,17 +25,10 @@ help:
 	@echo "    make kill-port-8000    - 检测并释放端口 8000"
 	@echo "    make backend-test      - 运行后端测试"
 	@echo "    make backend-lint      - 代码检查 (ruff + mypy)"
-	@echo ""
-	@echo "  前端开发:"
-	@echo "    make frontend-install  - 安装前端依赖 (pnpm install)"
-	@echo "    make frontend-run      - 启动前端服务 (vite)"
-	@echo "    make dev-frontend      - 同上"
-	@echo "    make frontend-build    - 构建前端"
-	@echo "    make frontend-lint     - 前端代码检查"
+	@echo "    make backend-format    - 自动修复代码格式"
 	@echo ""
 	@echo "  快速启动:"
 	@echo "    make dev           - 启动依赖服务 + 后端"
-	@echo "    make dev-all       - 启动依赖服务 + 前后端"
 	@echo ""
 	@echo "  数据库操作:"
 	@echo "    make db-shell      - 进入 PostgreSQL shell"
@@ -149,30 +141,6 @@ db-shell:
 redis-shell:
 	docker-compose -f docker-compose.dev.yml exec redis redis-cli
 
-# ========== 前端开发 ==========
-
-# 安装前端依赖
-frontend-install:
-	@echo "安装前端依赖..."
-	cd frontend && pnpm install
-	@echo "✓ 前端依赖安装完成"
-
-# 启动前端服务
-frontend-run:
-	@echo "启动前端服务..."
-	cd frontend && pnpm dev
-
-dev-frontend: frontend-run
-
-# 构建前端
-frontend-build:
-	@echo "构建前端..."
-	cd frontend && pnpm build
-
-# 前端代码检查
-frontend-lint:
-	cd frontend && pnpm lint
-
 # ========== 快速启动 ==========
 
 # 启动依赖 + 后端
@@ -181,21 +149,6 @@ dev: kill-port-8000 dev-deps
 	@sleep 3
 	@echo "启动后端服务..."
 	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# 启动所有 (需要另开终端启动前端)
-dev-all: dev-deps
-	@echo ""
-	@echo "✓ 依赖服务已启动"
-	@echo ""
-	@echo "请另开终端运行:"
-	@echo "  make dev-backend   # 启动后端"
-	@echo "  make dev-frontend  # 启动前端"
-	@echo ""
-	@echo "或使用 tmux 分屏:"
-	@echo "  tmux new -s kiki"
-	@echo "  # Ctrl+B + % 创建分屏"
-	@echo "  # 左屏: make dev-backend"
-	@echo "  # 右屏: make dev-frontend"
 
 # ========== 其他 ==========
 
@@ -206,7 +159,6 @@ test:
 # 清理所有
 clean: docker-clean
 	@echo "清理本地缓存..."
-	rm -rf frontend/node_modules frontend/dist frontend/.vite
 	rm -rf .venv uv.lock
 	@echo "✓ 清理完成"
 

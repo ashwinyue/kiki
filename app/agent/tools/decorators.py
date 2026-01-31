@@ -23,7 +23,7 @@ import logging
 import time
 from typing import Any, Callable, Type, TypeVar
 
-from app.observability import (
+from app.observability.log_sanitizer import (
     sanitize_agent_name,
     sanitize_log_input,
     sanitize_tool_name,

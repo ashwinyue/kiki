@@ -4,30 +4,15 @@
 """
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
 from starlette.requests import Request as StarletteRequest
 
-from app.agent.tools import get_tool, list_tools
-from app.rate_limit.limiter import RateLimit, limiter
 from app.observability.logging import get_logger
+from app.rate_limit.limiter import RateLimit, limiter
+from app.schemas.tool import ToolInfo, ToolsListResponse
+from app.services.tool_service import ToolService
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/tools", tags=["tools"])
-
-
-class ToolInfo(BaseModel):
-    """工具信息"""
-
-    name: str = Field(..., description="工具名称")
-    description: str = Field(..., description="工具描述")
-    args_schema: str | None = Field(None, description="参数架构")
-
-
-class ToolsListResponse(BaseModel):
-    """工具列表响应"""
-
-    tools: list[ToolInfo] = Field(default_factory=list, description="工具列表")
-    count: int = Field(..., description="工具数量")
 
 
 @router.get("", response_model=ToolsListResponse)
@@ -38,21 +23,9 @@ async def list_tools_api(request: StarletteRequest) -> ToolsListResponse:
     Returns:
         ToolsListResponse: 工具列表
     """
-    tools = list_tools()
-
-    tool_infos = []
-    for tool in tools:
-        tool_infos.append(
-            ToolInfo(
-                name=tool.name,
-                description=tool.description or "",
-                args_schema=tool.args_schema.__name__ if tool.args_schema else None,
-            )
-        )
-
-    logger.info("tools_listed", count=len(tool_infos))
-
-    return ToolsListResponse(tools=tool_infos, count=len(tool_infos))
+    result = ToolService.list_tools()
+    logger.info("tools_listed", count=result.count)
+    return result
 
 
 @router.get("/{tool_name}", response_model=ToolInfo)
@@ -66,15 +39,4 @@ async def get_tool_info(request: StarletteRequest, tool_name: str) -> ToolInfo:
     Returns:
         ToolInfo: 工具信息
     """
-    tool = get_tool(tool_name)
-
-    if tool is None:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail=f"工具 '{tool_name}' 不存在")
-
-    return ToolInfo(
-        name=tool.name,
-        description=tool.description or "",
-        args_schema=tool.args_schema.__name__ if tool.args_schema else None,
-    )
+    return ToolService.get_tool_info(tool_name)

@@ -1,268 +1,79 @@
 # Kiki MCP Server
 
-A Model Context Protocol (MCP) server that provides access to the Kiki Agent Framework API.
+Kiki Agent Framework 的 Model Context Protocol 服务器。
 
-## Features
+## 快速开始
 
-This MCP server exposes the following Kiki functionality through the MCP protocol:
-
-### Agent Management
-- `list_agents` - List all agents with optional filtering
-- `get_agent` - Get detailed information about a specific agent
-- `get_agent_stats` - Get statistics about all agents
-- `create_agent` - Create a new agent
-- `update_agent` - Update an existing agent
-- `delete_agent` - Delete an agent
-
-### Chat & Session
-- `chat` - Send a message to an agent and get a response
-- `get_chat_history` - Get chat history for a session
-- `clear_chat_history` - Clear chat history for a session
-- `get_context_stats` - Get context statistics for a session
-
-### Tools
-- `list_available_tools` - List all available tools
-
-### Multi-Agent Systems
-- `list_agent_systems` - List all multi-agent systems
-- `get_agent_system` - Get details of a multi-agent system
-- `delete_agent_system` - Delete a multi-agent system
-
-### Executions
-- `list_executions` - List agent execution history
-
-## Quick Start
-
-### 1. Install Dependencies
+### 使用 uv 启动 (推荐)
 
 ```bash
+uv --directory /path/to/kiki/mcp-server run run_server.py
+```
+
+### 使用 Python 启动
+
+```bash
+cd /path/to/kiki/mcp-server
 pip install -r requirements.txt
+python run_server.py
 ```
 
-### 2. Configure Environment Variables
+## 配置
 
-```bash
-# Linux/macOS
-export KIKI_BASE_URL="http://localhost:8000/api/v1"
-export KIKI_API_KEY="your_api_key_here"  # Optional
+### 环境变量
 
-# Windows PowerShell
-$env:KIKI_BASE_URL="http://localhost:8000/api/v1"
-$env:KIKI_API_KEY="your_api_key_here"  # Optional
-```
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `KIKI_BASE_URL` | Kiki API 地址 | `http://localhost:8000/api/v1` |
+| `KIKI_API_KEY` | Kiki API 密钥 | - |
+| `KIKI_TIMEOUT` | 请求超时时间(秒) | `120` |
 
-### 3. Run the Server
+## MCP 客户端配置
 
-```bash
-python main.py
-```
-
-### 4. Command Line Options
-
-```bash
-python main.py --help                 # Show help
-python main.py --check-only           # Check environment only
-python main.py --verbose              # Enable verbose logging
-python main.py --version              # Show version
-```
-
-## Installation as Python Package
-
-### Development Mode
-
-```bash
-pip install -e .
-```
-
-After installation, you can run:
-
-```bash
-kiki-mcp-server
-```
-
-### Production Mode
-
-```bash
-pip install .
-```
-
-## MCP Configuration
-
-To use this MCP server with Claude Desktop or other MCP clients, add the following to your MCP config:
+详细配置请参考 [MCP_CONFIG.md](./MCP_CONFIG.md)
 
 ```json
 {
   "mcpServers": {
     "kiki": {
-      "command": "python",
-      "args": ["/path/to/kiki/mcp-server/main.py"],
+      "command": "uv",
+      "args": ["--directory", "/path/to/kiki/mcp-server", "run", "run_server.py"],
       "env": {
-        "KIKI_BASE_URL": "http://localhost:8000/api/v1",
-        "KIKI_API_KEY": "kiki_mcp_your_api_key_here"
+        "KIKI_API_KEY": "kiki_xxxxx",
+        "KIKI_BASE_URL": "http://localhost:8000/api/v1"
       }
     }
   }
 }
 ```
 
-### Quick Setup (One-time)
+## 可用工具
 
-1. **Start Kiki server**:
-   ```bash
-   cd /path/to/kiki
-   uv run uvicorn app.main:app --reload
-   ```
+### Agent 管理
+- `list_agents` - 列出所有 Agent
+- `get_agent` - 获取 Agent 详情
+- `get_agent_stats` - 获取 Agent 统计
+- `create_agent` - 创建 Agent
+- `update_agent` - 更新 Agent
+- `delete_agent` - 删除 Agent
 
-2. **Create a user and login**:
-   ```bash
-   # Register (if needed)
-   curl -X POST "http://localhost:8000/api/v1/auth/register" \
-     -H "Content-Type: application/json" \
-     -d '{"username": "admin", "email": "admin@example.com", "password": "secure_password"}'
+### 聊天与会话
+- `chat` - 发送聊天消息
+- `get_chat_history` - 获取聊天历史
+- `clear_chat_history` - 清除聊天历史
+- `get_context_stats` - 获取上下文统计
 
-   # Login
-   curl -X POST "http://localhost:8000/api/v1/auth/login" \
-     -H "Content-Type: application/json" \
-     -d '{"username": "admin", "password": "secure_password"}'
-   ```
+### 工具
+- `list_available_tools` - 列出可用工具
 
-3. **Create MCP API Key**:
-   ```bash
-   # Use the JWT token from login response
-   export TOKEN="your_jwt_token_here"
+### 多 Agent 系统
+- `list_agent_systems` - 列出多 Agent 系统
+- `get_agent_system` - 获取多 Agent 系统详情
+- `delete_agent_system` - 删除多 Agent 系统
 
-   curl -X POST "http://localhost:8000/api/v1/api-keys/mcp/create?name=Claude%20Desktop" \
-     -H "Authorization: Bearer $TOKEN"
-   ```
-
-4. **Copy the API Key** from the response and use it in your MCP config.
-
-## Usage Examples
-
-### Listing Agents
-
-```python
-# Call the list_agents tool
-{
-  "name": "list_agents",
-  "arguments": {
-    "agent_type": "chat",
-    "status": "active",
-    "page": 1,
-    "size": 10
-  }
-}
-```
-
-### Creating an Agent
-
-```python
-# Call the create_agent tool
-{
-  "name": "create_agent",
-  "arguments": {
-    "name": "My Assistant",
-    "description": "A helpful assistant",
-    "agent_type": "chat",
-    "model_name": "gpt-4o",
-    "system_prompt": "You are a helpful assistant.",
-    "temperature": 0.7
-  }
-}
-```
-
-### Chatting with an Agent
-
-```python
-# Call the chat tool
-{
-  "name": "chat",
-  "arguments": {
-    "message": "Hello, how are you?",
-    "session_id": "my-session-123"
-  }
-}
-```
-
-## Configuration
-
-| Environment Variable | Description | Default |
-|---------------------|-------------|---------|
-| `KIKI_BASE_URL` | Kiki API base URL | `http://localhost:8000/api/v1` |
-| `KIKI_API_KEY` | API key or JWT token for authentication | (empty) |
-| `KIKI_TIMEOUT` | Request timeout in seconds | `120` |
-
-### Authentication
-
-The MCP server supports two authentication methods:
-
-1. **Kiki API Key** (recommended for MCP): Format: `kiki_xxxx`
-   - Create via Kiki API: `POST /api/v1/api-keys/mcp/create`
-   - Has scoped permissions (chat, agents:read, tools:read)
-
-2. **JWT Bearer Token**: Format: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
-   - Get from login: `POST /api/v1/auth/login`
-   - Full user permissions
-
-### Creating an MCP API Key
-
-To create a dedicated API Key for MCP server usage:
-
-```bash
-# First, login to get a JWT token
-curl -X POST "http://localhost:8000/api/v1/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "your_username", "password": "your_password"}'
-
-# Then create an MCP API Key
-curl -X POST "http://localhost:8000/api/v1/api-keys/mcp/create?name=My%20MCP%20Server" \
-  -H "Authorization: Bearer <your_jwt_token>"
-
-# Response will contain the API Key (save it, it won't be shown again!)
-# {
-#   "id": 1,
-#   "key": "kiki_mcp_abc123...",
-#   "key_prefix": "kiki_mcp",
-#   ...
-# }
-```
-
-## Troubleshooting
-
-### Import Errors
-
-If you encounter import errors:
-1. Ensure all dependencies are installed: `pip install -r requirements.txt`
-2. Check Python version compatibility (3.10+)
-3. Verify no file name conflicts (avoid naming files `mcp.py`)
-
-### Connection Errors
-
-If you can't connect to the Kiki API:
-1. Verify `KIKI_BASE_URL` is correct
-2. Check that the Kiki server is running
-3. Verify network connectivity
-4. Check if authentication is required
-
-## Development
-
-### Running Tests
-
-```bash
-pytest
-```
-
-### Code Formatting
-
-```bash
-black .
-ruff check .
-```
+### 执行历史
+- `list_executions` - 列出执行历史
 
 ## License
 
-MIT License
-
-## Support
-
-For issues and questions, please visit: https://github.com/your-org/kiki/issues
+MIT
