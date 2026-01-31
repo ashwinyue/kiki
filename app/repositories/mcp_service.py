@@ -6,7 +6,7 @@
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.agent import MCPService, MCPServiceCreate, MCPServiceUpdate
+from app.models.mcp_service import MCPService, MCPServiceCreate, MCPServiceUpdate
 from app.observability.logging import get_logger
 from app.repositories.base import BaseRepository
 
