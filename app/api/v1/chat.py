@@ -17,10 +17,10 @@ from starlette.requests import Request as StarletteRequest
 
 from app.agent import get_agent
 from app.agent.state import create_state_from_input
-from app.core.config import get_settings
-from app.core.limiter import RateLimit, limiter
-from app.core.memory import get_context_manager
-from app.core.tenant_middleware import TenantIdDep
+from app.config.settings import get_settings
+from app.rate_limit.limiter import RateLimit, limiter
+from app.agent.memory.context import get_context_manager
+from app.auth.middleware import TenantIdDep
 from app.observability.logging import get_logger
 from app.services.database import session_repository, session_scope
 

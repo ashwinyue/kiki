@@ -64,7 +64,7 @@ def _trim_messages(
     Returns:
         修剪后的消息列表
     """
-    from app.core.config import get_settings
+    from app.config.settings import get_settings
 
     settings = get_settings()
     max_messages = settings.agent_max_messages  # 从配置读取最大消息数
@@ -224,7 +224,7 @@ def create_initial_state(
     Returns:
         初始状态字典
     """
-    from app.core.config import get_settings
+    from app.config.settings import get_settings
 
     settings = get_settings()
     resolved_max_iterations = max_iterations or settings.agent_max_iterations

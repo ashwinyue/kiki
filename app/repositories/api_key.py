@@ -43,7 +43,7 @@ class ApiKeyRepository(BaseRepository[ApiKey]):
         Returns:
             创建的 API Key
         """
-        from app.core.api_key import ApiKeyService
+        from app.auth.api_key import ApiKeyService
 
         # 计算过期时间
         expires_at = None

@@ -13,7 +13,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.llm import get_llm_service
 from app.observability.logging import get_logger
 

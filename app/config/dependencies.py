@@ -9,8 +9,8 @@ from functools import lru_cache
 from app.agent import LangGraphAgent
 from app.agent.memory.base import BaseLongTermMemory
 from app.agent.memory.manager import MemoryManager, MemoryManagerFactory
-from app.core.config import Settings, get_settings
-from app.core.memory import ContextManager
+from app.config.settings import Settings, get_settings
+from app.agent.memory.context import ContextManager
 from app.llm import LLMService
 from app.observability.logging import get_logger
 
@@ -213,7 +213,7 @@ def get_context_manager_dep() -> ContextManager:
     Returns:
         ContextManager 实例
     """
-    from app.core.memory import get_context_manager
+    from app.agent.memory.context import get_context_manager
 
     return get_context_manager()
 
@@ -239,7 +239,7 @@ async def get_checkpointer_dep():
     Returns:
         检查点保存器实例或 None
     """
-    from app.core.config import get_settings
+    from app.config.settings import get_settings
 
     settings = get_settings()
 

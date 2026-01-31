@@ -8,7 +8,7 @@ from functools import lru_cache
 from redis.asyncio import ConnectionPool, Redis
 from redis.exceptions import RedisError
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

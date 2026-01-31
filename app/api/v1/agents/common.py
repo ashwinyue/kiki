@@ -10,7 +10,7 @@ from app.agent.graphs import create_react_agent
 from app.agent.state import AgentState
 from app.agent.tools import list_tools
 from app.api.v1.agents.schemas import AgentConfig
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.llm import get_llm_service
 from app.observability.logging import get_logger
 from app.services.database import session_repository, session_scope

@@ -124,7 +124,7 @@ Worker: {worker_list}
         Returns:
             状态更新，包含监督决策
         """
-        from app.core.errors import classify_error
+        from app.config.errors import classify_error
 
         # 构建上下文
         context = "\n".join(

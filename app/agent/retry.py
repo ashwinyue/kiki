@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Type
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

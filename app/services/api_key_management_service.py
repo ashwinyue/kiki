@@ -9,7 +9,7 @@ from typing import Annotated, Any
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.api_key import ApiKeyService as CoreApiKeyService
+from app.auth.api_key import ApiKeyService as CoreApiKeyService
 from app.services.database import get_session
 from app.models.api_key import (
     ApiKey,

@@ -38,7 +38,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

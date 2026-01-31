@@ -18,7 +18,7 @@ from langgraph.types import RunnableConfig
 from app.agent.graphs.base import BaseGraph
 from app.agent.state import AgentState
 from app.agent.tools import list_tools
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.llm import LLMService, get_llm_service
 from app.observability.logging import get_logger
 

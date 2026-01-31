@@ -25,7 +25,7 @@ from enum import Enum
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

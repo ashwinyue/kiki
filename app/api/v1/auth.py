@@ -9,8 +9,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.core.auth import get_token_sub
-from app.core.limiter import RateLimit, limiter
+from app.auth.jwt import get_token_sub
+from app.rate_limit.limiter import RateLimit, limiter
 from app.models.database import User
 from app.observability.logging import get_logger
 from app.schemas.auth import (

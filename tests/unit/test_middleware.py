@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import Request, Response
 
-from app.core.middleware import (
+from app.api.middleware import (
     ObservabilityMiddleware,
     RequestContextMiddleware,
 )

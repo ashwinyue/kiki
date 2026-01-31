@@ -3,7 +3,6 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './hooks/useAuth';
 
 // 布局组件
 import { MainLayout } from './components/layout/MainLayout';
@@ -18,77 +17,22 @@ import { ToolsPage } from './pages/tools/ToolsPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 
 /**
- * 路由守卫组件
- */
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/auth/login" replace />;
-  }
-
-  return <>{children}</>;
-}
-
-/**
- * 公共路由（已登录用户跳转）
- */
-function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  if (isAuthenticated) {
-    return <Navigate to="/chat" replace />;
-  }
-
-  return <>{children}</>;
-}
-
-/**
  * 应用根组件
+ * 注意：当前版本跳过登录验证，直接访问所有页面
  */
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         {/* 认证相关路由 */}
-        <Route
-          path="/auth"
-          element={
-            <PublicRoute>
-              <AuthLayout />
-            </PublicRoute>
-          }
-        >
+        <Route path="/auth" element={<AuthLayout />}>
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
           <Route index element={<Navigate to="/auth/login" replace />} />
         </Route>
 
-        {/* 主应用路由 */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <MainLayout />
-            </ProtectedRoute>
-          }
-        >
+        {/* 主应用路由 - 无需认证 */}
+        <Route path="/" element={<MainLayout />}>
           <Route index element={<Navigate to="/chat" replace />} />
           <Route path="chat" element={<ChatPage />} />
           <Route path="agents" element={<AgentsPage />} />

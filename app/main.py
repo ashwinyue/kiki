@@ -19,16 +19,16 @@ load_dotenv()
 from fastapi.responses import JSONResponse
 from starlette.requests import Request as StarletteRequest
 
-from app.core.config import get_settings
-from app.core.errors import classify_error, get_user_friendly_message
-from app.core.limiter import RateLimit, limiter, rate_limit_exceeded_handler
-from app.core.middleware import (
+from app.config.settings import get_settings
+from app.config.errors import classify_error, get_user_friendly_message
+from app.rate_limit.limiter import RateLimit, limiter, rate_limit_exceeded_handler
+from app.api.middleware import (
     MaxRequestSizeMiddleware,
     ObservabilityMiddleware,
     RequestContextMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.core.tenant_middleware import TenantMiddleware
+from app.auth.middleware import TenantMiddleware
 from app.observability.logging import configure_logging, get_logger
 
 # 获取配置
@@ -77,7 +77,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("app_shutting_down")
 
     # 关闭 Redis 连接池
-    from app.infra.redis import close_redis
+    from app.tools.redis import close_redis
 
     await close_redis()
 
@@ -164,7 +164,7 @@ def _register_routes(app: FastAPI) -> None:
 
         检查应用状态和依赖服务（Redis）的健康状态。
         """
-        from app.infra.redis import ping as redis_ping
+        from app.tools.redis import ping as redis_ping
 
         checks = {
             "app": "healthy",

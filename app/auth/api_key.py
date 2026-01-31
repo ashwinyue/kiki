@@ -10,7 +10,7 @@ import bcrypt
 from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.models.api_key import (
     ApiKey,
     ApiKeyType,
@@ -279,7 +279,7 @@ async def verify_api_key_or_token(
 
     Examples:
         ```python
-        from app.core.auth import get_current_user
+        from app.auth.jwt import get_current_user
 
         @app.get("/api/protected")
         async def protected(
@@ -289,7 +289,7 @@ async def verify_api_key_or_token(
             ...
         ```
     """
-    from app.core.auth import get_current_user
+    from app.auth.jwt import get_current_user
 
     # 如果 API Key 有效，直接返回
     if api_key is not None:

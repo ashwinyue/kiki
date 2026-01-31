@@ -9,7 +9,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import LLMResult
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.llm import resolve_provider
 from app.observability.logging import get_logger
 

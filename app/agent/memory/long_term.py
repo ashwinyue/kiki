@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.embeddings import Embeddings
 
 from app.agent.memory.base import BaseLongTermMemory
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.llm.embeddings import get_embeddings
 from app.observability.logging import get_logger
 

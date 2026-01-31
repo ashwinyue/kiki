@@ -127,7 +127,7 @@ class RouterAgent:
         Returns:
             状态更新，包含路由决策
         """
-        from app.core.errors import classify_error
+        from app.config.errors import classify_error
 
         last_message = state["messages"][-1]
         user_input = last_message.content if hasattr(last_message, "content") else str(last_message)

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from slowapi.errors import RateLimitExceeded
 
-from app.core.limiter import (
+from app.rate_limit.limiter import (
     RateLimit,
     _get_identifier,
     limit,

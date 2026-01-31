@@ -98,7 +98,7 @@ class TestGetCurrentUser:
     @pytest.mark.asyncio
     async def test_get_current_user_success(self) -> None:
         """测试成功获取当前用户"""
-        from app.core.auth import verify_token
+        from app.auth.jwt import verify_token
         from app.models.database import User
 
         mock_credentials = MagicMock()

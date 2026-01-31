@@ -4,7 +4,7 @@
 
 使用示例:
 ```python
-from app.core.configuration import Configuration
+from app.config.runtime import Configuration
 
 # 从环境变量创建
 config = Configuration.from_env()
@@ -24,7 +24,7 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

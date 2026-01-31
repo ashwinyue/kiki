@@ -11,7 +11,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Any
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 

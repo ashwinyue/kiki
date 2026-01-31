@@ -9,9 +9,9 @@ from fastapi import Depends, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from app.core.tenant_api_key import extract_tenant_id_from_api_key
-from app.core.auth import verify_token
-from app.core.tenant import TenantContext, set_tenant_context, clear_tenant_context
+from app.auth.tenant_api_key import extract_tenant_id_from_api_key
+from app.auth.jwt import verify_token
+from app.auth.tenant import TenantContext, set_tenant_context, clear_tenant_context
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -284,7 +284,7 @@ def get_tenant_context() -> TenantContext | None:
     Returns:
         TenantContext 对象，未认证返回 None
     """
-    from app.core.tenant import get_tenant_context as _get
+    from app.auth.tenant import get_tenant_context as _get
 
     return _get()
 

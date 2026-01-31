@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.config import Settings, get_settings
+from app.config.settings import Settings, get_settings
 from app.core.database import init_db
 from app.main import app
 from app.models.database import (
@@ -182,7 +182,7 @@ async def test_admin_user(db_session: AsyncSession) -> dict[str, Any]:
 @pytest.fixture
 def auth_headers(test_user: dict[str, Any]) -> dict[str, str]:
     """生成认证头"""
-    from app.core.auth import create_access_token
+    from app.auth.jwt import create_access_token
 
     token_data = create_access_token(data={"sub": str(test_user["id"])})
     return {"Authorization": f"Bearer {token_data.access_token}"}

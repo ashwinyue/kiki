@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, status
 from starlette.requests import Request as StarletteRequest
 
 from app.api.v1.auth import get_current_user_id as get_current_user_id_int
-from app.core.limiter import RateLimit, limiter
+from app.rate_limit.limiter import RateLimit, limiter
 from app.models.api_key import (
     ApiKeyCreate,
     ApiKeyRead,

@@ -43,7 +43,7 @@ except (ImportError, OSError):
 
 # 延迟导入配置（需要避免循环依赖和初始化顺序问题）
 # noqa: E402 - 必须在可选依赖检查之后导入
-from app.core.config import get_settings  # noqa: E402
+from app.config.settings import get_settings  # noqa: E402
 
 settings = get_settings()
 

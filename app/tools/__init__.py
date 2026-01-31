@@ -1,9 +1,9 @@
-"""基础设施模块
+"""通用工具集
 
-提供缓存、Redis、存储等基础设施服务。
+提供缓存、存储、搜索等基础设施工具。
 """
 
-from app.infra.cache import (
+from app.tools.cache import (
     CachePenetrationProtection,
     DistributedLock,
     RedisCache,
@@ -14,11 +14,12 @@ from app.infra.cache import (
     penetration_protection,
     warmup_cache,
 )
-from app.infra.redis import close_redis, get_redis, ping
-from app.infra.storage import Storage, get_storage
+from app.tools.redis import close_redis, get_redis, ping
+from app.tools.search import SearchEngine, get_search_engine, with_web_search
+from app.tools.storage import Storage, get_storage
 
 __all__ = [
-    # 缓存
+    # Cache
     "RedisCache",
     "DistributedLock",
     "CachePenetrationProtection",
@@ -32,7 +33,11 @@ __all__ = [
     "close_redis",
     "get_redis",
     "ping",
-    # 存储
+    # Storage
     "Storage",
     "get_storage",
+    # Search
+    "SearchEngine",
+    "get_search_engine",
+    "with_web_search",
 ]

@@ -34,7 +34,7 @@ def get_api_key_secret() -> bytes:
         secret = os.getenv("TENANT_AES_KEY")
         if not secret:
             # 从配置获取
-            from app.core.config import get_settings
+            from app.config.settings import get_settings
 
             settings = get_settings()
             secret = getattr(settings, "tenant_aes_key", "")

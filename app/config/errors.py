@@ -9,7 +9,7 @@ from enum import Enum
 from openai import APIConnectionError, APITimeoutError, RateLimitError
 from pydantic import ValidationError
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

@@ -25,7 +25,7 @@ from langchain_core.tools import tool
 from pydantic import Field, field_validator
 
 from app.agent.tools.search_postprocessor import SearchResultPostProcessor
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

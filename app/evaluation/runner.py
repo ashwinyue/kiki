@@ -13,12 +13,12 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.agent import get_agent
-from app.core.evaluation.datasets import Dataset, get_dataset
-from app.core.evaluation.evaluators import (
+from app.evaluation.datasets import Dataset, get_dataset
+from app.evaluation.evaluators import (
     BaseEvaluator,
     create_evaluator,
 )
-from app.core.evaluation.report import (
+from app.evaluation.report import (
     EntryResult,
     EvaluationReport,
     create_report,
@@ -424,7 +424,7 @@ def create_evaluation_runner(
 
     Examples:
         ```python
-        from app.core.evaluation import create_evaluation_runner, EvaluationConfig
+        from app.evaluation import create_evaluation_runner, EvaluationConfig
 
         runner = create_evaluation_runner(
             config=EvaluationConfig(

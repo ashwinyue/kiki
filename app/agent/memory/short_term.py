@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 if TYPE_CHECKING:

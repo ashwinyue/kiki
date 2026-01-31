@@ -23,7 +23,7 @@ os.environ.setdefault("KIKI_REDIS_URL", "redis://localhost:16379/15")
 @pytest.fixture(scope="session")
 def test_settings():
     """测试环境配置 - session 级别，整个测试会话只创建一次"""
-    from app.core.config import Settings
+    from app.config.settings import Settings
 
     return Settings(_env_file=".env.testing")
 

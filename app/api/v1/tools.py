@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from starlette.requests import Request as StarletteRequest
 
 from app.agent.tools import get_tool, list_tools
-from app.core.limiter import RateLimit, limiter
+from app.rate_limit.limiter import RateLimit, limiter
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

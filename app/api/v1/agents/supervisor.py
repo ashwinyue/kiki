@@ -23,8 +23,8 @@ from app.api.v1.agents.schemas import (
     ChatResponse,
     SupervisorAgentRequest,
 )
-from app.core.limiter import RateLimit, limiter
-from app.core.tenant_middleware import TenantIdDep
+from app.rate_limit.limiter import RateLimit, limiter
+from app.auth.middleware import TenantIdDep
 from app.llm import get_llm_service
 from app.observability.logging import get_logger
 

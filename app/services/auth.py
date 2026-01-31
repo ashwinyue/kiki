@@ -9,7 +9,7 @@ from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import create_access_token
+from app.auth.jwt import create_access_token
 from app.models.database import SessionCreate, User
 from app.observability.logging import get_logger
 from app.repositories.message import MessageRepository

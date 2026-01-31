@@ -35,7 +35,7 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.log_sanitizer import sanitize_log_input
 from app.observability.logging import get_logger
 

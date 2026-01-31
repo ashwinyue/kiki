@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tenant_api_key import generate_api_key
+from app.auth.tenant_api_key import generate_api_key
 from app.models.database import Tenant, TenantCreate, TenantUpdate
 from app.observability.logging import get_logger
 

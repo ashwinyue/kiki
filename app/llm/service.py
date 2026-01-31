@@ -11,7 +11,7 @@ from langchain_core.messages import BaseMessage
 from openai import APIError, APITimeoutError, OpenAIError, RateLimitError
 from pydantic import BaseModel
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.llm.registry import LLMRegistry
 from app.observability.logging import get_logger
 

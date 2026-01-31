@@ -4,7 +4,7 @@
 
 使用示例:
     ```python
-    from app.core.evaluation import (
+    from app.evaluation import (
         ResponseEvaluator,
         ToolCallEvaluator,
         EvaluationRunner,
@@ -25,7 +25,7 @@
     ```
 """
 
-from app.core.evaluation.datasets import (
+from app.evaluation.datasets import (
     Dataset,
     DatasetEntry,
     builtin_datasets,
@@ -33,19 +33,19 @@ from app.core.evaluation.datasets import (
     list_datasets,
     register_dataset,
 )
-from app.core.evaluation.evaluators import (
+from app.evaluation.evaluators import (
     BaseEvaluator,
     ConversationEvaluator,
     ResponseEvaluator,
     ToolCallEvaluator,
     create_evaluator,
 )
-from app.core.evaluation.report import (
+from app.evaluation.report import (
     EvaluationReport,
     Metric,
     MetricType,
 )
-from app.core.evaluation.runner import (
+from app.evaluation.runner import (
     EvaluationConfig,
     EvaluationResult,
     EvaluationRunner,

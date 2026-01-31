@@ -16,7 +16,7 @@ from typing import Any
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
-from app.infra.redis import RedisCache
+from app.tools.redis import RedisCache
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -585,7 +585,7 @@ def get_context_storage(
     global _storage
 
     if _storage is None:
-        from app.core.config import get_settings
+        from app.config.settings import get_settings
 
         settings = get_settings()
         resolved_storage_type = storage_type or settings.context_storage_type
@@ -622,7 +622,7 @@ def get_context_manager(
     global _manager
 
     if _manager is None:
-        from app.core.config import get_settings
+        from app.config.settings import get_settings
 
         settings = get_settings()
         resolved_max_messages = max_messages or settings.context_max_messages

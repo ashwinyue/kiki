@@ -36,8 +36,8 @@ from app.api.v1.agents.schemas import (
 from app.api.v1.agents.supervisor import router as supervisor_router
 from app.api.v1.agents.swarm import router as swarm_router
 from app.models.agent import AgentType, AgentStatus
-from app.core.limiter import RateLimit, limiter
-from app.core.tenant_middleware import TenantIdDep
+from app.rate_limit.limiter import RateLimit, limiter
+from app.auth.middleware import TenantIdDep
 from app.observability.logging import get_logger
 from app.repositories.agent_async import (
     AgentExecutionRepositoryAsync,

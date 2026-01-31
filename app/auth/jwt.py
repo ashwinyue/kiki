@@ -11,7 +11,7 @@ from fastapi import Depends
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

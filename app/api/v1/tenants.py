@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from app.core.tenant_middleware import (
+from app.auth.middleware import (
     require_tenant,
     TenantIdDep,
 )

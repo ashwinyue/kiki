@@ -12,7 +12,7 @@ from typing import Literal
 
 from langchain_openai import OpenAIEmbeddings
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

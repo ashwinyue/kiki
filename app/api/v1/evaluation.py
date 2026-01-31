@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.requests import Request as StarletteRequest
 
-from app.core.evaluation import (
+from app.evaluation import (
     EvaluationConfig,
     EvaluationReport,
     EvaluationRunner,
@@ -21,7 +21,7 @@ from app.core.evaluation import (
     get_dataset,
     list_datasets,
 )
-from app.core.limiter import RateLimit, limiter
+from app.rate_limit.limiter import RateLimit, limiter
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -270,7 +270,7 @@ async def _run_evaluation_stream(
                 if update.get("type") == "complete":
                     report_data = update.get("report")
                     if report_data:
-                        from app.core.evaluation.report import EvaluationReport
+                        from app.evaluation.report import EvaluationReport
 
                         report = EvaluationReport(**report_data)
                         _evaluation_results[run_id] = report

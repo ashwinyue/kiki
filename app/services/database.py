@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlmodel import SQLModel, create_engine
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 from app.repositories import (
     MessageRepository,

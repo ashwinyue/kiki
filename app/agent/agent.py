@@ -32,8 +32,8 @@ except (ImportError, OSError):
 
 from app.agent.graphs import ChatGraph
 from app.agent.state import create_state_from_input
-from app.core.memory import get_context_manager
-from app.core.config import get_settings
+from app.agent.memory.context import get_context_manager
+from app.config.settings import get_settings
 from app.llm import LLMService, get_llm_service
 from app.observability.logging import get_logger
 

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.core.evaluation.evaluators import (
+from app.evaluation.evaluators import (
     BaseEvaluator,
     ConversationEvaluator,
     EvaluationMetric,
@@ -16,7 +16,7 @@ from app.core.evaluation.evaluators import (
     ToolCallEvaluator,
     create_evaluator,
 )
-from app.core.evaluation.report import (
+from app.evaluation.report import (
     EvaluatorSummary,
     EvaluationReport,
     create_report,

@@ -46,7 +46,7 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore as LangChainVectorStore
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.llm.embeddings import get_embeddings
 from app.observability.logging import get_logger
 

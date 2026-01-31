@@ -23,7 +23,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import bind_context, get_logger
 
 settings = get_settings()
@@ -154,7 +154,7 @@ class TokenBucketRateLimiter(BaseHTTPMiddleware):
 
     使用示例：
         ```python
-        from app.core.token_bucket import TokenBucketRateLimiter
+        from app.rate_limit.token_bucket import TokenBucketRateLimiter
 
         app.add_middleware(
             TokenBucketRateLimiter,

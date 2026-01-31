@@ -22,7 +22,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 settings = get_settings()

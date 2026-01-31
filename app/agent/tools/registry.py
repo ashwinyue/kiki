@@ -14,7 +14,7 @@ from langchain_core.tools import BaseTool
 from langchain_core.tools import tool as lc_tool
 from langgraph.prebuilt import ToolNode
 
-from app.core.errors import handle_tool_error
+from app.config.errors import handle_tool_error
 from app.observability.logging import get_logger
 
 # 尝试导入 MCP 模块（可选依赖）

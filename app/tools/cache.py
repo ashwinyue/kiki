@@ -10,7 +10,7 @@
 
 使用示例：
     ```python
-    from app.infra.cache import cached, cache_instance
+    from app.tools.cache import cached, cache_instance
 
     # 使用装饰器
     @cached(ttl=600, key_prefix="user")
@@ -42,7 +42,7 @@ from typing import Any, Optional
 
 import redis.asyncio as aioredis
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.observability.logging import get_logger
 
 settings = get_settings()
