@@ -5,7 +5,7 @@
 
 使用示例:
 ```python
-from app.agent.streaming import (
+from app.agent.streaming.streaming import (
     StreamingAgent,
     stream_agent_response,
     TokenStream,
@@ -499,7 +499,7 @@ async def create_fastapi_streaming_response(
     Examples:
         ```python
         from fastapi import FastAPI
-        from app.agent.streaming import create_fastapi_streaming_response
+        from app.agent.streaming.streaming import create_fastapi_streaming_response
 
         app = FastAPI()
 

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.agent.checkpoint import (
+from app.agent.checkpoint.checkpoint import (
     CheckpointManager,
     create_checkpointer,
 )

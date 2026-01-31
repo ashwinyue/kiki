@@ -42,7 +42,7 @@ from app.agent.agent import (
     create_agent,
     get_agent,
 )
-from app.agent.clarification import (
+from app.agent.capabilities.clarification import (
     ClarificationNode,
     build_clarified_query,
     build_clarified_topic_from_history,
@@ -90,13 +90,13 @@ from app.agent.state import (
     create_state_from_input,
     get_default_state,
 )
-from app.agent.tool_interceptor import (
+from app.agent.tools.interceptor import (
     ToolInterceptor,
     ToolExecutionResult,
     create_tool_interceptor,
     wrap_tools_with_interceptor,
 )
-from app.agent.retry import (  # noqa: E402, F401
+from app.agent.retry.retry import (  # noqa: E402, F401
     NetworkError,
     RateLimitError,
     ResourceUnavailableError,
@@ -119,7 +119,7 @@ def _get_streaming():
     return streaming
 
 # 直接导出 streaming 主要类和函数
-from app.agent.streaming import (  # noqa: E402, F401
+from app.agent.streaming.streaming import (  # noqa: E402, F401
     DoneEvent,
     ErrorEvent,
     StatusEvent,
@@ -145,7 +145,7 @@ from app.agent.context import (  # noqa: E402, F401
     truncate_messages,
     truncate_text,
 )
-from app.agent.rag import (  # noqa: E402, F401
+from app.agent.capabilities.rag import (  # noqa: E402, F401
     BaseVectorStore,
     ChromaStore,
     PgVectorStore,

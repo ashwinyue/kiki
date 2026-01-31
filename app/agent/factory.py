@@ -41,7 +41,7 @@ from app.agent.multi_agent import (
     SupervisorAgent,
     create_multi_agent_system,
 )
-from app.agent.tool_interceptor import wrap_tools_with_interceptor
+from app.agent.tools.interceptor import wrap_tools_with_interceptor
 from app.config.settings import get_settings
 from app.llm import LLMService, get_llm_service
 from app.observability.logging import get_logger

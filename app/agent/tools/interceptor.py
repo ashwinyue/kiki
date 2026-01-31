@@ -4,7 +4,7 @@
 
 使用示例:
 ```python
-from app.agent.tool_interceptor import wrap_tools_with_interceptor
+from app.agent.tools.interceptor import wrap_tools_with_interceptor
 
 tools = [search_tool, database_tool]
 

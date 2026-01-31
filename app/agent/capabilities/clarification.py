@@ -5,7 +5,7 @@
 
 使用示例:
     ```python
-    from app.agent.clarification import (
+    from app.agent.capabilities.clarification import (
         needs_clarification,
         build_clarified_query,
         create_clarification_prompt,

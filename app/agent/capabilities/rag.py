@@ -15,7 +15,7 @@
 
 使用示例:
 ```python
-from app.agent.rag import (
+from app.agent.capabilities.rag import (
     VectorStore,
     retrieve_documents,
     create_retrieval_tool,

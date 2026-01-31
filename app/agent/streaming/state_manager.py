@@ -5,7 +5,7 @@
 
 使用示例:
 ```python
-from app.agent.state_manager import StateManager, state_update
+from app.agent.streaming.state_manager import StateManager, state_update
 
 # 在节点中使用
 async def my_node(state: AgentState, config: RunnableConfig) -> dict:

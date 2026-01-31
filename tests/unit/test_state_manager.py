@@ -7,7 +7,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.state import AgentState
-from app.agent.state_manager import (
+from app.agent.streaming.state_manager import (
     StateManager,
     StateUpdate,
     StateValidator,
