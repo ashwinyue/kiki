@@ -3,15 +3,11 @@
 支持多种搜索引擎的集成。
 """
 
-import os
-from typing import Any
-
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from app.core.logging import get_logger
-from app.core.metrics import track_tool_call
-
+from app.observability.logging import get_logger
+from app.observability.metrics import track_tool_call
 
 logger = get_logger(__name__)
 
@@ -51,7 +47,7 @@ async def search_web(query: str, max_results: int = 5) -> str:
                 )
                 for result in ddgs_gen:
                     results.append(f"- {result.get('title', '')}: {result.get('href', '')}")
-                    if result.get('body'):
+                    if result.get("body"):
                         results.append(f"  {result['body'][:200]}...")
 
             logger.info("web_search_completed", query=query, result_count=len(results))
@@ -64,8 +60,10 @@ async def search_web(query: str, max_results: int = 5) -> str:
 
 # ============== Tavily 搜索（备选方案）============
 
+
 class TavilySearchInput(BaseModel):
     """Tavily 搜索输入"""
+
     query: str = Field(description="搜索查询")
     max_results: int = Field(default=5, ge=1, le=10, description="最大结果数")
     search_depth: str = Field(default="basic", description="搜索深度: basic/advanced")
@@ -94,6 +92,7 @@ async def search_web_tavily(
             return "Tavily 搜索不可用，请安装: pip install tavily-python"
 
         import os
+
         api_key = os.getenv("TAVILY_API_KEY")
         if not api_key:
             return "Tavily API Key 未配置，请设置 TAVILY_API_KEY 环境变量"
@@ -127,6 +126,7 @@ async def search_web_tavily(
 
 
 # ============== 统一搜索接口 ==============
+
 
 class SearchEngine:
     """搜索引擎管理类
@@ -200,6 +200,7 @@ def get_search_engine() -> SearchEngine:
 
 
 # ============== 装饰器：为 Agent 添加搜索能力 ==============
+
 
 def with_web_search(agent_class: type) -> type:
     """为 Agent 类添加 Web 搜索能力

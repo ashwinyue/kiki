@@ -1,96 +1,44 @@
 """认证 API
 
 提供用户注册、登录、会话管理、Token 验证等接口。
+使用 Service 层处理业务逻辑，API 层仅负责请求/响应处理。
 """
 
-import uuid
-from typing import List
+from typing import Annotated
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    Form,
-    HTTPException,
-    Request,
-)
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, EmailStr, Field
 
-from app.core.auth import create_access_token, verify_token, get_token_sub
-from app.core.config import get_settings
-from app.core.limiter import limiter, RateLimit
-from app.core.logging import get_logger, bind_context
-from app.models.database import User, Session, SessionCreate
-from app.services.database import (
-    session_scope,
-    user_repository,
-    session_repository,
+from app.core.auth import get_token_sub
+from app.core.limiter import RateLimit, limiter
+from app.models.database import User
+from app.observability.logging import get_logger
+from app.schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    SessionListItem,
+    SessionResponse,
+    TokenResponse,
+    UserResponse,
+    UserWithTokenResponse,
 )
+from app.services.auth import get_auth_service
+from app.services.database import session_scope
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer()
-
-
-# ============== Schemas ==============
-
-class RegisterRequest(BaseModel):
-    """注册请求"""
-    email: EmailStr = Field(..., description="邮箱")
-    password: str = Field(..., min_length=8, max_length=100, description="密码")
-    full_name: str | None = Field(None, max_length=255, description="全名")
-
-
-class LoginRequest(BaseModel):
-    """登录请求"""
-    username: str = Field(..., description="邮箱")
-    password: str = Field(..., description="密码")
-
-
-class TokenResponse(BaseModel):
-    """Token 响应"""
-    access_token: str
-    token_type: str = "bearer"
-    expires_at: str | None = None
-
-
-class UserResponse(BaseModel):
-    """用户响应"""
-    id: int
-    email: str
-    full_name: str | None
-    is_active: bool
-    is_superuser: bool
-
-
-class UserWithTokenResponse(UserResponse):
-    """用户响应（含 Token）"""
-    access_token: str
-    token_type: str = "bearer"
-
-
-class SessionResponse(BaseModel):
-    """会话响应"""
-    session_id: str
-    name: str
-    token: str
-    created_at: str
-
-
-class SessionListItem(BaseModel):
-    """会话列表项"""
-    session_id: str
-    name: str
-    created_at: str
-    message_count: int = 0
 
 
 # ============== 认证依赖 ==============
 
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ) -> User:
     """获取当前用户
+
+    验证 JWT Token 并返回用户信息。
 
     Args:
         credentials: HTTP Bearer 认证凭据
@@ -99,37 +47,45 @@ async def get_current_user(
         User: 用户实例
 
     Raises:
-        HTTPException: 认证失败
+        HTTPException: 认证失败时返回 401
     """
-    settings = get_settings()
     token = credentials.credentials
-
     user_id = get_token_sub(token)
     if user_id is None:
         logger.warning("invalid_token", token_prefix=token[:10] + "...")
         raise HTTPException(
-            status_code=401,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     async with session_scope() as session:
+        from app.services.database import user_repository
+
         repo = user_repository(session)
-        user = await repo.get_by_email(user_id)
+        # Token 中的 sub 是用户 ID（整数）
+        user = await repo.get(int(user_id))
         if user is None:
-            logger.error("user_not_found", email=user_id)
-            raise HTTPException(status_code=404, detail="User not found")
+            logger.error("user_not_found", user_id=user_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
 
         # 绑定用户上下文
+        from app.observability.logging import bind_context
+
         bind_context(user_id=user.id)
 
         return user
 
 
 async def get_current_user_id(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ) -> int:
     """获取当前用户 ID
+
+    轻量级认证依赖，仅返回用户 ID 而非完整用户对象。
 
     Args:
         credentials: HTTP Bearer 认证凭据
@@ -138,31 +94,50 @@ async def get_current_user_id(
         int: 用户 ID
 
     Raises:
-        HTTPException: 认证失败
+        HTTPException: 认证失败时返回 401
     """
-    settings = get_settings()
     token = credentials.credentials
-
     user_id = get_token_sub(token)
     if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
 
     # 尝试解析为整数
     try:
         return int(user_id)
-    except ValueError:
+    except ValueError as err:
         # 如果是 email，查找用户 ID
         async with session_scope() as session:
+            from app.services.database import user_repository
+
             repo = user_repository(session)
             user = await repo.get_by_email(user_id)
             if user is None:
-                raise HTTPException(status_code=404, detail="User not found")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found",
+                ) from err
             return user.id
 
 
 # ============== 注册/登录 ==============
 
-@router.post("/register", response_model=UserWithTokenResponse)
+
+@router.post(
+    "/register",
+    response_model=UserWithTokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="用户注册",
+    description="创建新用户账号并返回访问令牌。密码需包含至少一个大写字母和一个数字。",
+    responses={
+        status.HTTP_201_CREATED: {"description": "注册成功"},
+        status.HTTP_400_BAD_REQUEST: {"description": "请求参数验证失败"},
+        status.HTTP_409_CONFLICT: {"description": "邮箱已被注册"},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"description": "请求过于频繁"},
+    },
+)
 @limiter.limit(RateLimit.REGISTER)
 async def register(
     request: Request,
@@ -170,88 +145,59 @@ async def register(
 ) -> UserWithTokenResponse:
     """用户注册
 
-    Args:
-        request: FastAPI 请求
-        data: 注册数据
-
-    Returns:
-        UserWithTokenResponse: 用户信息及 Token
+    创建新用户账号，密码需满足复杂度要求：
+    - 至少 8 个字符
+    - 至少包含一个大写字母
+    - 至少包含一个数字
     """
     async with session_scope() as session:
-        repo = user_repository(session)
-
-        # 检查邮箱是否已存在
-        if await repo.email_exists(data.email):
-            raise HTTPException(status_code=400, detail="Email already registered")
-
-        # 创建用户
-        from app.models.database import UserCreate
-
-        user_create = UserCreate(
-            email=data.email,
-            password=data.password,
-            full_name=data.full_name,
-        )
-        user = await repo.create_with_password(user_create)
-
-        # 生成 Token
-        token_data = create_access_token(data={"sub": str(user.id)})
-        access_token = token_data.access_token
-
-        logger.info("user_registered", user_id=user.id, email=user.email)
-
-        return UserWithTokenResponse(
-            id=user.id,
-            email=user.email,
-            full_name=user.full_name,
-            is_active=user.is_active,
-            is_superuser=user.is_superuser,
-            access_token=access_token,
-        )
+        auth_service = get_auth_service(session)
+        return await auth_service.register_user(data)
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="用户登录（表单）",
+    description="使用表单数据登录，返回访问令牌。",
+    responses={
+        status.HTTP_200_OK: {"description": "登录成功"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "邮箱或密码错误"},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"description": "请求过于频繁"},
+    },
+)
 @limiter.limit(RateLimit.LOGIN)
 async def login(
     request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
+    username: Annotated[str, Form(description="邮箱")],
+    password: Annotated[str, Form(description="密码")],
 ) -> TokenResponse:
-    """用户登录
+    """用户登录（表单格式）
 
-    Args:
-        request: FastAPI 请求
-        username: 邮箱
-        password: 密码
-
-    Returns:
-        TokenResponse: 访问令牌
+    适用于传统表单提交的登录方式。
     """
     async with session_scope() as session:
-        repo = user_repository(session)
-
-        # 验证密码
-        user = await repo.verify_password(username, password)
-        if user is None:
-            raise HTTPException(
-                status_code=401,
-                detail="Incorrect email or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # 生成 Token
-        token_data = create_access_token(data={"sub": str(user.id)})
-
-        logger.info("user_logged_in", user_id=user.id, email=user.email)
+        auth_service = get_auth_service(session)
+        access_token, expires_at = await auth_service.login_user(username, password)
 
         return TokenResponse(
-            access_token=token_data.access_token,
+            access_token=access_token,
             token_type="bearer",
-            expires_at=token_data.expires_at.isoformat() if token_data.expires_at else None,
+            expires_at=expires_at.isoformat() if expires_at else None,
         )
 
 
-@router.post("/login/json", response_model=TokenResponse)
+@router.post(
+    "/login/json",
+    response_model=TokenResponse,
+    summary="用户登录（JSON）",
+    description="使用 JSON 数据登录，返回访问令牌。",
+    responses={
+        status.HTTP_200_OK: {"description": "登录成功"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "邮箱或密码错误"},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"description": "请求过于频繁"},
+    },
+)
 @limiter.limit(RateLimit.LOGIN)
 async def login_json(
     request: Request,
@@ -259,219 +205,151 @@ async def login_json(
 ) -> TokenResponse:
     """用户登录（JSON 格式）
 
-    Args:
-        request: FastAPI 请求
-        data: 登录数据
-
-    Returns:
-        TokenResponse: 访问令牌
+    适用于前后端分离的 API 调用。
     """
     async with session_scope() as session:
-        repo = user_repository(session)
-
-        user = await repo.verify_password(data.username, data.password)
-        if user is None:
-            raise HTTPException(
-                status_code=401,
-                detail="Incorrect email or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        token_data = create_access_token(data={"sub": str(user.id)})
-
-        logger.info("user_logged_in", user_id=user.id)
+        auth_service = get_auth_service(session)
+        access_token, expires_at = await auth_service.login_user(
+            data.username,
+            data.password,
+        )
 
         return TokenResponse(
-            access_token=token_data.access_token,
+            access_token=access_token,
             token_type="bearer",
-            expires_at=token_data.expires_at.isoformat() if token_data.expires_at else None,
+            expires_at=expires_at.isoformat() if expires_at else None,
         )
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    summary="获取当前用户",
+    description="获取当前登录用户的详细信息。",
+    responses={
+        status.HTTP_200_OK: {"description": "成功返回用户信息"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "未认证"},
+    },
+)
+@limiter.limit(RateLimit.API)
 async def get_me(
-    current_user: User = Depends(get_current_user),
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> UserResponse:
     """获取当前用户信息
 
-    Args:
-        current_user: 当前用户
-
-    Returns:
-        UserResponse: 用户信息
+    返回当前登录用户的详细信息。
     """
-    return UserResponse(
-        id=current_user.id,
-        email=current_user.email,
-        full_name=current_user.full_name,
-        is_active=current_user.is_active,
-        is_superuser=current_user.is_superuser,
-    )
+    async with session_scope() as session:
+        auth_service = get_auth_service(session)
+        return await auth_service.get_user_response(current_user)
 
 
 # ============== 会话管理 ==============
 
-@router.post("/sessions", response_model=SessionResponse)
+
+@router.post(
+    "/sessions",
+    response_model=SessionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="创建会话",
+    description="创建新的聊天会话并返回会话令牌。",
+    responses={
+        status.HTTP_201_CREATED: {"description": "会话创建成功"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "未认证"},
+    },
+)
+@limiter.limit(RateLimit.API)
 async def create_session(
     request: Request,
-    current_user: User = Depends(get_current_user),
-    name: str = Form(""),
+    current_user: Annotated[User, Depends(get_current_user)],
+    name: Annotated[str, Form(description="会话名称")] = "",
 ) -> SessionResponse:
     """创建新会话
 
-    Args:
-        request: FastAPI 请求
-        current_user: 当前用户
-        name: 会话名称
-
-    Returns:
-        SessionResponse: 会话信息及 Token
+    创建一个独立的聊天会话，每个会话有自己的消息历史。
     """
     async with session_scope() as session:
-        repo = session_repository(session)
-
-        # 创建会话
-        session_obj = await repo.create_with_user(
-            data=SessionCreate(name=name),
-            user_id=current_user.id,
-        )
-
-        # 生成 Token（session_id 作为 subject）
-        token_data = create_access_token(data={"sub": session_obj.id})
-
-        logger.info(
-            "session_created",
-            session_id=session_obj.id,
-            user_id=current_user.id,
-            name=name,
-        )
-
-        return SessionResponse(
-            session_id=session_obj.id,
-            name=session_obj.name,
-            token=token_data.access_token,
-            created_at=session_obj.created_at.isoformat(),
-        )
+        auth_service = get_auth_service(session)
+        return await auth_service.create_session(current_user.id, name)
 
 
-@router.get("/sessions", response_model=List[SessionListItem])
+@router.get(
+    "/sessions",
+    response_model=list[SessionListItem],
+    summary="列出会话",
+    description="获取当前用户的所有会话列表。",
+    responses={
+        status.HTTP_200_OK: {"description": "成功返回会话列表"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "未认证"},
+    },
+)
+@limiter.limit(RateLimit.API)
 async def list_sessions(
     request: Request,
-    current_user: User = Depends(get_current_user),
-) -> List[SessionListItem]:
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> list[SessionListItem]:
     """列出用户的所有会话
 
-    Args:
-        request: FastAPI 请求
-        current_user: 当前用户
-
-    Returns:
-        List[SessionListItem]: 会话列表
+    返回当前用户的所有聊天会话，包含每个会话的消息数量。
     """
     async with session_scope() as session:
-        repo = session_repository(session)
-
-        from app.repositories.base import PaginationParams
-
-        params = PaginationParams(page=1, size=100)
-        result = await repo.list_by_user(current_user.id, params)
-
-        items = []
-        for session_obj in result.items:
-            # 获取消息数量
-            message_count = await repo.get_message_count(session_obj.id)
-
-            items.append(
-                SessionListItem(
-                    session_id=session_obj.id,
-                    name=session_obj.name,
-                    created_at=session_obj.created_at.isoformat(),
-                    message_count=message_count,
-                )
-            )
-
-        return items
+        auth_service = get_auth_service(session)
+        return await auth_service.list_sessions(current_user.id)
 
 
-@router.delete("/sessions/{session_id}")
+@router.delete(
+    "/sessions/{session_id}",
+    response_model=dict[str, str],
+    summary="删除会话",
+    description="删除指定的会话及其关联的所有消息。",
+    responses={
+        status.HTTP_200_OK: {"description": "会话删除成功"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "未认证"},
+        status.HTTP_403_FORBIDDEN: {"description": "无权删除其他用户的会话"},
+        status.HTTP_404_NOT_FOUND: {"description": "会话不存在"},
+    },
+)
+@limiter.limit(RateLimit.API)
 async def delete_session(
     request: Request,
     session_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, str]:
     """删除会话
 
-    Args:
-        request: FastAPI 请求
-        session_id: 会话 ID
-        current_user: 当前用户
-
-    Returns:
-        操作结果
+    删除指定会话及其关联的所有消息。只能删除自己的会话。
     """
     async with session_scope() as session:
-        repo = session_repository(session)
-
-        # 验证会话归属
-        session_obj = await repo.get(session_id)
-        if session_obj is None:
-            raise HTTPException(status_code=404, detail="Session not found")
-
-        if session_obj.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Cannot delete other users' sessions")
-
-        # 删除会话关联的消息
-        from app.repositories.message import MessageRepository
-
-        message_repo = MessageRepository(session)
-        await message_repo.delete_by_session(session_id)
-
-        # 删除会话
-        await repo.delete(session_id)
-
-        logger.info("session_deleted", session_id=session_id, user_id=current_user.id)
+        auth_service = get_auth_service(session)
+        await auth_service.delete_session(session_id, current_user.id)
 
         return {"status": "success", "message": "Session deleted"}
 
 
-@router.patch("/sessions/{session_id}")
+@router.patch(
+    "/sessions/{session_id}",
+    response_model=SessionResponse,
+    summary="更新会话名称",
+    description="修改指定会话的名称。",
+    responses={
+        status.HTTP_200_OK: {"description": "会话名称更新成功"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "未认证"},
+        status.HTTP_403_FORBIDDEN: {"description": "无权修改其他用户的会话"},
+        status.HTTP_404_NOT_FOUND: {"description": "会话不存在"},
+    },
+)
+@limiter.limit(RateLimit.API)
 async def update_session_name(
     request: Request,
     session_id: str,
-    name: str = Form(...),
-    current_user: User = Depends(get_current_user),
+    name: Annotated[str, Form(description="新名称")],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> SessionResponse:
     """更新会话名称
 
-    Args:
-        request: FastAPI 请求
-        session_id: 会话 ID
-        name: 新名称
-        current_user: 当前用户
-
-    Returns:
-        SessionResponse: 更新后的会话信息
+    修改指定会话的名称。只能修改自己的会话。
     """
     async with session_scope() as session:
-        repo = session_repository(session)
-
-        session_obj = await repo.get(session_id)
-        if session_obj is None:
-            raise HTTPException(status_code=404, detail="Session not found")
-
-        if session_obj.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Cannot modify other users' sessions")
-
-        # 更新名称
-        session_obj.name = name
-        await session.commit()
-        await session.refresh(session_obj)
-
-        logger.info("session_name_updated", session_id=session_id, name=name)
-
-        return SessionResponse(
-            session_id=session_obj.id,
-            name=session_obj.name,
-            token="",  # 不返回新 token
-            created_at=session_obj.created_at.isoformat(),
-        )
+        auth_service = get_auth_service(session)
+        return await auth_service.update_session_name(session_id, current_user.id, name)

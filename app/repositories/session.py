@@ -3,15 +3,13 @@
 提供会话相关的数据访问操作。
 """
 
-from typing import Any
-
-from sqlalchemy import select, func, desc
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.database import ChatSession, SessionCreate
-from app.repositories.base import BaseRepository, PaginationParams, PaginatedResult
-from app.core.logging import get_logger
+from app.observability.logging import get_logger
+from app.repositories.base import BaseRepository, PaginatedResult, PaginationParams
 
 logger = get_logger(__name__)
 
@@ -47,6 +45,10 @@ class SessionRepository(BaseRepository[ChatSession]):
             id=str(uuid.uuid4()),
             name=data.name,
             user_id=user_id or data.user_id,
+            tenant_id=data.tenant_id,
+            agent_id=data.agent_id,
+            agent_config=data.agent_config,
+            context_config=data.context_config,
         )
         return await self.create(session_obj)
 
@@ -71,7 +73,9 @@ class SessionRepository(BaseRepository[ChatSession]):
             result = await self.session.execute(statement)
             return result.scalar_one_or_none()
         except Exception as e:
-            logger.error("session_repository_get_with_messages_failed", session_id=session_id, error=str(e))
+            logger.error(
+                "session_repository_get_with_messages_failed", session_id=session_id, error=str(e)
+            )
             return None
 
     async def list_by_user(
@@ -105,13 +109,15 @@ class SessionRepository(BaseRepository[ChatSession]):
         from app.models.database import Message
 
         try:
-            statement = select(func.count()).select_from(Message).where(
-                Message.session_id == session_id
+            statement = (
+                select(func.count()).select_from(Message).where(Message.session_id == session_id)
             )
             result = await self.session.execute(statement)
             return result.scalar() or 0
         except Exception as e:
-            logger.error("session_repository_count_messages_failed", session_id=session_id, error=str(e))
+            logger.error(
+                "session_repository_count_messages_failed", session_id=session_id, error=str(e)
+            )
             return 0
 
     async def list_recent(

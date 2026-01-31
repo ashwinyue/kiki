@@ -3,18 +3,21 @@
 定义仓储层的基础接口和通用操作。
 """
 
-from typing import Generic, TypeVar, Sequence, Any
+from __future__ import annotations
+
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.logging import get_logger
+from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 # ============== 分页参数 ==============
+
 
 class PaginationParams(BaseModel):
     """分页参数"""
@@ -66,6 +69,7 @@ class PaginatedResult(BaseModel, Generic[T]):
 
 
 # ============== 基础仓储 ==============
+
 
 class BaseRepository(Generic[T]):
     """基础仓储类
@@ -120,7 +124,9 @@ class BaseRepository(Generic[T]):
             result = await self.session.execute(statement)
             return result.scalar_one_or_none()
         except Exception as e:
-            logger.error("repository_get_by_failed", model=self.model.__name__, kwargs=kwargs, error=str(e))
+            logger.error(
+                "repository_get_by_failed", model=self.model.__name__, kwargs=kwargs, error=str(e)
+            )
             return None
 
     async def list(
@@ -186,7 +192,9 @@ class BaseRepository(Generic[T]):
             return PaginatedResult.create(items, total, params)
 
         except Exception as e:
-            logger.error("repository_list_paginated_failed", model=self.model.__name__, error=str(e))
+            logger.error(
+                "repository_list_paginated_failed", model=self.model.__name__, error=str(e)
+            )
             return PaginatedResult.create([], 0, params)
 
     async def create(self, obj: T) -> T:
@@ -297,3 +305,150 @@ class BaseRepository(Generic[T]):
         """
         count = await self.count(**kwargs)
         return count > 0
+
+    # ============== 租户过滤方法 ==============
+
+    async def get_by_tenant(
+        self,
+        id: int | str,
+        tenant_id: int,
+    ) -> T | None:
+        """根据 ID 和租户 ID 获取记录
+
+        自动添加租户过滤，确保数据隔离。
+
+        Args:
+            id: 记录 ID
+            tenant_id: 租户 ID
+
+        Returns:
+            模型实例，不存在返回 None
+        """
+        try:
+            # 检查模型是否有 tenant_id 字段
+            if not hasattr(self.model, "tenant_id"):
+                logger.warning(
+                    "model_no_tenant_id",
+                    model=self.model.__name__,
+                )
+                return await self.get(id)
+
+            statement = select(self.model).where(
+                self.model.id == id,  # type: ignore
+                self.model.tenant_id == tenant_id,  # type: ignore
+            )
+            result = await self.session.execute(statement)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(
+                "repository_get_by_tenant_failed",
+                model=self.model.__name__,
+                id=id,
+                tenant_id=tenant_id,
+                error=str(e),
+            )
+            return None
+
+    async def list_by_tenant(
+        self,
+        tenant_id: int,
+        *,
+        offset: int = 0,
+        limit: int = 100,
+        **kwargs: Any,
+    ) -> list[T]:
+        """按租户获取记录列表
+
+        自动添加租户过滤，确保数据隔离。
+
+        Args:
+            tenant_id: 租户 ID
+            offset: 偏移量
+            limit: 限制数量
+            **kwargs: 额外的过滤条件
+
+        Returns:
+            模型实例列表
+        """
+        try:
+            # 检查模型是否有 tenant_id 字段
+            if not hasattr(self.model, "tenant_id"):
+                logger.warning(
+                    "model_no_tenant_id",
+                    model=self.model.__name__,
+                )
+                return await self.list(offset=offset, limit=limit, **kwargs)
+
+            statement = select(self.model).where(
+                self.model.tenant_id == tenant_id,  # type: ignore
+            )
+            for key, value in kwargs.items():
+                if hasattr(self.model, key):
+                    statement = statement.where(getattr(self.model, key) == value)
+            statement = statement.offset(offset).limit(limit)
+            result = await self.session.execute(statement)
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(
+                "repository_list_by_tenant_failed",
+                model=self.model.__name__,
+                tenant_id=tenant_id,
+                error=str(e),
+            )
+            return []
+
+    async def list_paginated_by_tenant(
+        self,
+        tenant_id: int,
+        params: PaginationParams,
+        **kwargs: Any,
+    ) -> PaginatedResult[T]:
+        """按租户分页获取记录列表
+
+        自动添加租户过滤，确保数据隔离。
+
+        Args:
+            tenant_id: 租户 ID
+            params: 分页参数
+            **kwargs: 额外的过滤条件
+
+        Returns:
+            分页结果
+        """
+        try:
+            # 检查模型是否有 tenant_id 字段
+            if not hasattr(self.model, "tenant_id"):
+                logger.warning(
+                    "model_no_tenant_id",
+                    model=self.model.__name__,
+                )
+                return await self.list_paginated(params, **kwargs)
+
+            # 构建查询
+            statement = select(self.model).where(
+                self.model.tenant_id == tenant_id,  # type: ignore
+            )
+            for key, value in kwargs.items():
+                if hasattr(self.model, key):
+                    statement = statement.where(getattr(self.model, key) == value)
+
+            # 获取总数
+            count_stmt = select(func.count()).select_from(statement.subquery())
+            total_result = await self.session.execute(count_stmt)
+            total = total_result.scalar() or 0
+
+            # 获取分页数据
+            statement = statement.offset(params.offset).limit(params.limit)
+            items_result = await self.session.execute(statement)
+            items = list(items_result.scalars().all())
+
+            return PaginatedResult.create(items, total, params)
+
+        except Exception as e:
+            logger.error(
+                "repository_list_paginated_by_tenant_failed",
+                model=self.model.__name__,
+                tenant_id=tenant_id,
+                error=str(e),
+            )
+            return PaginatedResult.create([], 0, params)

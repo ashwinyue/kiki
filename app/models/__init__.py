@@ -1,57 +1,60 @@
 """数据模型定义（SQLModel）"""
 
-from app.models.database import (
-    # User
-    User,
-    UserCreate,
-    UserUpdate,
-    UserPublic,
-    # Session
-    ChatSession as Session,
-    SessionCreate,
-    SessionPublic,
-    # Thread
-    Thread,
-    ThreadCreate,
-    ThreadPublic,
-    # Message
-    Message,
-    MessageCreate,
-    MessagePublic,
-    # Memory (from database.py)
-    Memory,
-    MemoryCreate,
-    MemoryUpdate,
-    MemoryPublic,
-    # Token
-    Token,
-    TokenPayload,
-)
-
 from app.models.agent import (
     # Agent
     Agent,
-    AgentType,
-    AgentStatus,
     AgentCreate,
-    AgentUpdate,
-    AgentPublic,
-    # Tool
-    Tool,
-    ToolCreate,
-    ToolUpdate,
-    ToolPublic,
-    # Agent-Tool 关联
-    AgentTool,
-    # PromptTemplate
-    PromptTemplate,
-    PromptTemplateCreate,
-    PromptTemplateUpdate,
-    PromptTemplatePublic,
     # AgentExecution
     AgentExecution,
     AgentExecutionCreate,
     AgentExecutionPublic,
+    AgentPublic,
+    AgentStatus,
+    AgentType,
+    AgentUpdate,
+    # PromptTemplate
+    PromptTemplate,
+    PromptTemplateCreate,
+    PromptTemplatePublic,
+    PromptTemplateUpdate,
+    # MCPService
+    MCPService,
+    MCPServiceCreate,
+    MCPServicePublic,
+    MCPServiceUpdate,
+)
+from app.models.database import (
+    # Session
+    ChatSession as Session,
+)
+from app.models.database import (
+    # Memory (from database.py)
+    Memory,
+    MemoryCreate,
+    MemoryPublic,
+    MemoryUpdate,
+    # Message
+    Message,
+    MessageCreate,
+    MessagePublic,
+    SessionCreate,
+    SessionPublic,
+    Tenant,
+    TenantCreate,
+    TenantPublic,
+    TenantUpdate,
+    # Thread
+    Thread,
+    ThreadCreate,
+    ThreadPublic,
+    # Token
+    Token,
+    TokenPayload,
+    # User
+    User,
+    UserCreate,
+    UserPublic,
+    UserUpdate,
 )
 
 __all__ = [
@@ -60,6 +63,10 @@ __all__ = [
     "UserCreate",
     "UserUpdate",
     "UserPublic",
+    "Tenant",
+    "TenantCreate",
+    "TenantUpdate",
+    "TenantPublic",
     # Session
     "Session",
     "SessionCreate",
@@ -87,17 +94,16 @@ __all__ = [
     "AgentCreate",
     "AgentUpdate",
     "AgentPublic",
-    # Tool
-    "Tool",
-    "ToolCreate",
-    "ToolUpdate",
-    "ToolPublic",
-    "AgentTool",
     # PromptTemplate
     "PromptTemplate",
     "PromptTemplateCreate",
     "PromptTemplateUpdate",
     "PromptTemplatePublic",
+    # MCPService
+    "MCPService",
+    "MCPServiceCreate",
+    "MCPServiceUpdate",
+    "MCPServicePublic",
     # AgentExecution
     "AgentExecution",
     "AgentExecutionCreate",

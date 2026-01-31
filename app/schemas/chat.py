@@ -1,7 +1,6 @@
 """聊天相关模式"""
 
 from pydantic import BaseModel, Field
-from typing import list
 
 
 class ChatRequest(BaseModel):

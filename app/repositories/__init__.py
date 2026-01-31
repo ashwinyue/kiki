@@ -3,15 +3,20 @@
 提供数据库操作的抽象层。
 """
 
+from app.repositories.agent_async import (
+    AgentExecutionRepositoryAsync,
+    AgentRepositoryAsync,
+)
 from app.repositories.base import (
     BaseRepository,
-    PaginationParams,
     PaginatedResult,
+    PaginationParams,
 )
-from app.repositories.user import UserRepository
+from app.repositories.message import MessageRepository
+from app.repositories.mcp_service import MCPServiceRepository
 from app.repositories.session import SessionRepository
 from app.repositories.thread import ThreadRepository
-from app.repositories.message import MessageRepository
+from app.repositories.user import UserRepository
 
 __all__ = [
     "BaseRepository",
@@ -21,4 +26,7 @@ __all__ = [
     "SessionRepository",
     "ThreadRepository",
     "MessageRepository",
+    "MCPServiceRepository",
+    "AgentRepositoryAsync",
+    "AgentExecutionRepositoryAsync",
 ]

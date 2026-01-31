@@ -3,14 +3,12 @@
 提供用户相关的数据访问操作。
 """
 
-from typing import Any
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import User, UserCreate
-from app.repositories.base import BaseRepository, PaginationParams, PaginatedResult
-from app.core.logging import get_logger
+from app.observability.logging import get_logger
+from app.repositories.base import BaseRepository, PaginatedResult, PaginationParams
 
 logger = get_logger(__name__)
 
@@ -64,6 +62,8 @@ class UserRepository(BaseRepository[User]):
                 full_name=data.full_name,
                 is_active=data.is_active,
                 is_superuser=data.is_superuser,
+                tenant_id=data.tenant_id,
+                can_access_all_tenants=data.can_access_all_tenants,
             )
             user.set_password(data.password)
 

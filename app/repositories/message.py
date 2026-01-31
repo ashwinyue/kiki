@@ -3,15 +3,12 @@
 提供消息相关的数据访问操作。
 """
 
-from typing import Any
-
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.models.database import Message, MessageCreate
-from app.repositories.base import BaseRepository, PaginationParams, PaginatedResult
-from app.core.logging import get_logger
+from app.observability.logging import get_logger
+from app.repositories.base import BaseRepository, PaginatedResult, PaginationParams
 
 logger = get_logger(__name__)
 
@@ -45,6 +42,10 @@ class MessageRepository(BaseRepository[Message]):
             role=data.role,
             content=data.content,
             session_id=session_id or data.session_id,
+            request_id=data.request_id,
+            knowledge_references=data.knowledge_references,
+            agent_steps=data.agent_steps,
+            is_completed=data.is_completed if data.is_completed is not None else True,
             tool_calls=data.tool_calls,
             extra_data=data.extra_data,
         )
@@ -90,7 +91,9 @@ class MessageRepository(BaseRepository[Message]):
             result = await self.session.execute(statement)
             return list(result.scalars().all())
         except Exception as e:
-            logger.error("message_repository_list_by_session_asc_failed", session_id=session_id, error=str(e))
+            logger.error(
+                "message_repository_list_by_session_asc_failed", session_id=session_id, error=str(e)
+            )
             return []
 
     async def get_last_by_session(
@@ -147,7 +150,12 @@ class MessageRepository(BaseRepository[Message]):
             result = await self.session.execute(statement)
             return list(result.scalars().all())
         except Exception as e:
-            logger.error("message_repository_list_by_role_failed", session_id=session_id, role=role, error=str(e))
+            logger.error(
+                "message_repository_list_by_role_failed",
+                session_id=session_id,
+                role=role,
+                error=str(e),
+            )
             return []
 
     async def delete_by_session(
@@ -178,7 +186,9 @@ class MessageRepository(BaseRepository[Message]):
 
         except Exception as e:
             await self.session.rollback()
-            logger.error("message_repository_delete_by_session_failed", session_id=session_id, error=str(e))
+            logger.error(
+                "message_repository_delete_by_session_failed", session_id=session_id, error=str(e)
+            )
             return 0
 
     async def count_by_session(

@@ -1,0 +1,315 @@
+/**
+ * Kiki Agent Framework - 主题变量系统
+ *
+ * 设计理念: "流动的智能" (Fluid Intelligence)
+ * - 琥珀橙主色: 唤醒、温暖、创造力
+ * - 靛蓝辅助: 深度思考、逻辑
+ * - 玻璃态: 通透、层次
+ * - 流动渐变: 模拟思维流动
+ */
+
+/* ============================================
+   亮色主题 (默认) - 琥珀橙 + 靛蓝
+   ============================================ */
+:root,
+:root[data-theme="light"] {
+  /* === 品牌色 - 琥珀橙系 === */
+  --kiki-amber-50:  #fff8eb;
+  --kiki-amber-100: #fef3c7;
+  --kiki-amber-200: #fde68a;
+  --kiki-amber-300: #fcd34d;
+  --kiki-amber-400: #fbbf24;
+  --kiki-amber-500: #f59e0b;  /* 主品牌色 */
+  --kiki-amber-600: #d97706;
+  --kiki-amber-700: #b45309;
+  --kiki-amber-800: #92400e;
+  --kiki-amber-900: #78350f;
+
+  /* === 辅助色 - 靛蓝系 === */
+  --kiki-indigo-50:  #eef2ff;
+  --kiki-indigo-100: #e0e7ff;
+  --kiki-indigo-200: #c7d2fe;
+  --kiki-indigo-300: #a5b4fc;
+  --kiki-indigo-400: #818cf8;
+  --kiki-indigo-500: #6366f1;  /* 辅助品牌色 */
+  --kiki-indigo-600: #4f46e5;
+  --kiki-indigo-700: #4338ca;
+  --kiki-indigo-800: #3730a3;
+  --kiki-indigo-900: #312e81;
+
+  /* === 功能色 === */
+  --kiki-success-50:  #ecfdf5;
+  --kiki-success-100: #d1fae5;
+  --kiki-success-500: #10b981;
+  --kiki-success-600: #059669;
+
+  --kiki-warning-50:  #fffbeb;
+  --kiki-warning-100: #fed7aa;
+  --kiki-warning-500: #f97316;
+  --kiki-warning-600: #ea580c;
+
+  --kiki-error-50:   #fef2f2;
+  --kiki-error-100:  #fecaca;
+  --kiki-error-500:  #ef4444;
+  --kiki-error-600:  #dc2626;
+
+  /* === 中性色 (暖灰) === */
+  --kiki-neutral-0:   #ffffff;
+  --kiki-neutral-50:  #fafaf9;
+  --kiki-neutral-100: #f5f5f4;
+  --kiki-neutral-200: #e7e5e4;
+  --kiki-neutral-300: #d6d3d1;
+  --kiki-neutral-400: #a8a29e;
+  --kiki-neutral-500: #78716c;
+  --kiki-neutral-600: #57534e;
+  --kiki-neutral-700: #44403c;
+  --kiki-neutral-800: #292524;
+  --kiki-neutral-900: #1c1917;
+
+  /* === 语义化颜色 === */
+  --kiki-primary:       var(--kiki-amber-500);
+  --kiki-primary-hover: var(--kiki-amber-400);
+  --kiki-primary-active: var(--kiki-amber-600);
+  --kiki-secondary:     var(--kiki-indigo-500);
+
+  /* === 背景色 (带微妙渐变) === */
+  --kiki-bg-base:      #fafaf9;
+  --kiki-bg-surface:   #ffffff;
+  --kiki-bg-elevated:  #ffffff;
+  --kiki-bg-subtle:    #f5f5f4;
+
+  /* === 文字色 === */
+  --kiki-text-primary:   #1c1917;
+  --kiki-text-secondary: #57534e;
+  --kiki-text-tertiary:  #a8a29e;
+  --kiki-text-inverse:   #ffffff;
+
+  /* === 边框色 === */
+  --kiki-border-subtle: #e7e5e4;
+  --kiki-border-default: #d6d3d1;
+  --kiki-border-strong: #a8a29e;
+
+  /* === 玻璃态效果 === */
+  --kiki-glass-bg: rgba(255, 255, 255, 0.7);
+  --kiki-glass-border: rgba(255, 255, 255, 0.18);
+  --kiki-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+
+  /* === 阴影 === */
+  --kiki-shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.05);
+  --kiki-shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --kiki-shadow-md:  0 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --kiki-shadow-lg:  0 10px 15px rgba(0, 0, 0, 0.08), 0 4px 6px rgba(0, 0, 0, 0.04);
+  --kiki-shadow-xl:  0 20px 25px rgba(0, 0, 0, 0.1), 0 10px 10px rgba(0, 0, 0, 0.04);
+  --kiki-shadow-amber: 0 8px 30px rgba(245, 158, 11, 0.2);
+  --kiki-shadow-indigo: 0 8px 30px rgba(99, 102, 241, 0.2);
+
+  /* === 圆角 === */
+  --kiki-radius-none: 0;
+  --kiki-radius-sm:   4px;
+  --kiki-radius-md:   8px;
+  --kiki-radius-lg:   12px;
+  --kiki-radius-xl:   16px;
+  --kiki-radius-2xl:  24px;
+  --kiki-radius-full: 9999px;
+
+  /* === 字体家族 === */
+  --kiki-font-display: 'Geist', 'SF Pro Display', -apple-system, sans-serif;
+  --kiki-font-body:    'IBM Plex Sans', 'SF Pro Text', -apple-system, sans-serif;
+  --kiki-font-mono:    'IBM Plex Mono', 'SF Mono', 'Consolas', monospace;
+
+  /* === 字体大小 === */
+  --kiki-text-xs:   0.75rem;    /* 12px */
+  --kiki-text-sm:   0.875rem;   /* 14px */
+  --kiki-text-base: 1rem;       /* 16px */
+  --kiki-text-lg:   1.125rem;   /* 18px */
+  --kiki-text-xl:   1.25rem;    /* 20px */
+  --kiki-text-2xl:  1.5rem;     /* 24px */
+  --kiki-text-3xl:  1.875rem;   /* 30px */
+  --kiki-text-4xl:  2.25rem;    /* 36px */
+  --kiki-text-5xl:  3rem;       /* 48px */
+
+  /* === 行高 === */
+  --kiki-leading-tight:   1.25;
+  --kiki-leading-snug:    1.375;
+  --kiki-leading-normal:  1.5;
+  --kiki-leading-relaxed: 1.625;
+  --kiki-leading-loose:   2;
+
+  /* === 间距 === */
+  --kiki-space-0:   0;
+  --kiki-space-1:   0.25rem;  /* 4px */
+  --kiki-space-2:   0.5rem;   /* 8px */
+  --kiki-space-3:   0.75rem;  /* 12px */
+  --kiki-space-4:   1rem;     /* 16px */
+  --kiki-space-5:   1.25rem;  /* 20px */
+  --kiki-space-6:   1.5rem;   /* 24px */
+  --kiki-space-8:   2rem;     /* 32px */
+  --kiki-space-10:  2.5rem;   /* 40px */
+  --kiki-space-12:  3rem;     /* 48px */
+  --kiki-space-16:  4rem;     /* 64px */
+
+  /* === 过渡 === */
+  --kiki-duration-fast:   150ms;
+  --kiki-duration-base:   300ms;
+  --kiki-duration-slow:   500ms;
+  --kiki-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --kiki-ease-in:     cubic-bezier(0.4, 0, 1, 1);
+  --kiki-ease-out:    cubic-bezier(0, 0, 0.2, 1);
+  --kiki-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* === 渐变 === */
+  --kiki-gradient-amber: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+  --kiki-gradient-indigo: linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #4f46e5 100%);
+  --kiki-gradient-mesh: radial-gradient(at 40% 20%, rgba(251, 191, 36, 0.15) 0px, transparent 50%),
+                        radial-gradient(at 80% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+                        radial-gradient(at 0% 50%, rgba(245, 158, 11, 0.08) 0px, transparent 50%);
+
+  /* === 特殊颜色 === */
+  --kiki-user-msg-bg: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  --kiki-user-msg-text: #1c1917;
+  --kiki-bot-msg-bg: #ffffff;
+  --kiki-bot-msg-text: #1c1917;
+
+  /* === 提及标签 === */
+  --kiki-tag-kb-bg: rgba(99, 102, 241, 0.1);
+  --kiki-tag-kb-text: #4f46e5;
+  --kiki-tag-tool-bg: rgba(245, 158, 11, 0.1);
+  --kiki-tag-tool-text: #d97706;
+  --kiki-tag-file-bg: rgba(16, 185, 129, 0.1);
+  --kiki-tag-file-text: #059669;
+}
+
+/* ============================================
+   暗色主题 - 深邃琥珀
+   ============================================ */
+:root[data-theme="dark"] {
+  /* === 品牌色 - 调整暗色 === */
+  --kiki-amber-500: #f59e0b;
+  --kiki-amber-400: #fbbf24;
+  --kiki-amber-600: #d97706;
+
+  /* === 辅助色 === */
+  --kiki-indigo-500: #818cf8;
+  --kiki-indigo-400: #a5b4fc;
+
+  /* === 中性色 === */
+  --kiki-neutral-0:   #0c0a09;
+  --kiki-neutral-50:  #1c1917;
+  --kiki-neutral-100: #292524;
+  --kiki-neutral-200: #44403c;
+  --kiki-neutral-300: #57534e;
+  --kiki-neutral-400: #78716c;
+  --kiki-neutral-500: #a8a29e;
+  --kiki-neutral-600: #d6d3d1;
+  --kiki-neutral-700: #e7e5e4;
+  --kiki-neutral-800: #f5f5f4;
+  --kiki-neutral-900: #fafaf9;
+
+  /* === 背景色 === */
+  --kiki-bg-base:      #0c0a09;
+  --kiki-bg-surface:   #1c1917;
+  --kiki-bg-elevated:  #292524;
+  --kiki-bg-subtle:    #1c1917;
+
+  /* === 文字色 === */
+  --kiki-text-primary:   #fafaf9;
+  --kiki-text-secondary: #a8a29e;
+  --kiki-text-tertiary:  #78716c;
+  --kiki-text-inverse:   #1c1917;
+
+  /* === 边框色 === */
+  --kiki-border-subtle: #292524;
+  --kiki-border-default: #44403c;
+  --kiki-border-strong: #57534e;
+
+  /* === 玻璃态效果 === */
+  --kiki-glass-bg: rgba(28, 25, 23, 0.8);
+  --kiki-glass-border: rgba(255, 255, 255, 0.08);
+
+  /* === 阴影 === */
+  --kiki-shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.3);
+  --kiki-shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --kiki-shadow-md:  0 4px 6px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --kiki-shadow-lg:  0 10px 15px rgba(0, 0, 0, 0.4), 0 4px 6px rgba(0, 0, 0, 0.3);
+  --kiki-shadow-xl:  0 20px 25px rgba(0, 0, 0, 0.5), 0 10px 10px rgba(0, 0, 0, 0.4);
+  --kiki-shadow-amber: 0 8px 30px rgba(245, 158, 11, 0.3);
+  --kiki-shadow-indigo: 0 8px 30px rgba(129, 140, 248, 0.3);
+
+  /* === 渐变 === */
+  --kiki-gradient-amber: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+  --kiki-gradient-indigo: linear-gradient(135deg, #a5b4fc 0%, #818cf8 50%, #6366f1 100%);
+  --kiki-gradient-mesh: radial-gradient(at 40% 20%, rgba(251, 191, 36, 0.12) 0px, transparent 50%),
+                        radial-gradient(at 80% 0%, rgba(129, 140, 248, 0.08) 0px, transparent 50%),
+                        radial-gradient(at 0% 50%, rgba(245, 158, 11, 0.06) 0px, transparent 50%);
+
+  /* === 特殊颜色 === */
+  --kiki-user-msg-bg: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  --kiki-user-msg-text: #ffffff;
+  --kiki-bot-msg-bg: #292524;
+  --kiki-bot-msg-text: #fafaf9;
+
+  /* === 提及标签 === */
+  --kiki-tag-kb-bg: rgba(129, 140, 248, 0.15);
+  --kiki-tag-kb-text: #a5b4fc;
+  --kiki-tag-tool-bg: rgba(251, 191, 36, 0.15);
+  --kiki-tag-tool-text: #fbbf24;
+  --kiki-tag-file-bg: rgba(52, 211, 153, 0.15);
+  --kiki-tag-file-text: #34d399;
+}
+
+/* ============================================
+   语义化快捷变量
+   ============================================ */
+:root {
+  --color-primary: var(--kiki-primary);
+  --color-secondary: var(--kiki-secondary);
+  --color-success: var(--kiki-success-500);
+  --color-warning: var(--kiki-warning-500);
+  --color-error: var(--kiki-error-500);
+
+  --color-bg: var(--kiki-bg-base);
+  --color-bg-card: var(--kiki-bg-surface);
+  --color-bg-hover: var(--kiki-bg-elevated);
+
+  --color-text: var(--kiki-text-primary);
+  --color-text-muted: var(--kiki-text-secondary);
+  --color-text-dim: var(--kiki-text-tertiary);
+
+  --color-border: var(--kiki-border-subtle);
+
+  --radius-sm: var(--kiki-radius-sm);
+  --radius-md: var(--kiki-radius-md);
+  --radius-lg: var(--kiki-radius-lg);
+  --radius-xl: var(--kiki-radius-xl);
+  --radius-full: var(--kiki-radius-full);
+
+  --shadow-sm: var(--kiki-shadow-sm);
+  --shadow-md: var(--kiki-shadow-md);
+  --shadow-lg: var(--kiki-shadow-lg);
+  --shadow-glow: var(--kiki-shadow-amber);
+
+  --gradient-brand: var(--kiki-gradient-amber);
+  --gradient-mesh: var(--kiki-gradient-mesh);
+
+  --font-display: var(--kiki-font-display);
+  --font-body: var(--kiki-font-body);
+  --font-mono: var(--kiki-font-mono);
+
+  --text-xs: var(--kiki-text-xs);
+  --text-sm: var(--kiki-text-sm);
+  --text-base: var(--kiki-text-base);
+  --text-lg: var(--kiki-text-lg);
+  --text-xl: var(--kiki-text-xl);
+  --text-2xl: var(--kiki-text-2xl);
+  --text-3xl: var(--kiki-text-3xl);
+
+  --space-1: var(--kiki-space-1);
+  --space-2: var(--kiki-space-2);
+  --space-3: var(--kiki-space-3);
+  --space-4: var(--kiki-space-4);
+  --space-6: var(--kiki-space-6);
+  --space-8: var(--kiki-space-8);
+
+  --ease-out: var(--kiki-ease-out);
+  --ease-bounce: var(--kiki-ease-bounce);
+}

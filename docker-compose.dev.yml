@@ -1,0 +1,78 @@
+# Kiki Agent 开发环境 - 仅依赖服务
+# 前后端应用使用 Makefile 本地启动，方便快速开发
+
+services:
+  # PostgreSQL 数据库 (with pgvector extension)
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: kiki-postgres-dev
+    environment:
+      POSTGRES_DB: ${KIKI_DATABASE_DB:-kiki}
+      POSTGRES_USER: ${KIKI_DATABASE_USER:-kiki}
+      POSTGRES_PASSWORD: ${KIKI_DATABASE_PASSWORD:-kiki_secret}
+    ports:
+      - "${KIKI_DATABASE_PORT:-15432}:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KIKI_DATABASE_USER:-kiki} -d ${KIKI_DATABASE_DB:-kiki}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: always
+    networks:
+      - kiki-dev-network
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: kiki-redis-dev
+    command: redis-server --appendonly yes
+    ports:
+      - "${KIKI_REDIS_PORT:-16379}:6379"
+    volumes:
+      - redis-dev-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: always
+    networks:
+      - kiki-dev-network
+
+  # MinIO 对象存储 (可选，用于文件存储测试)
+  minio:
+    image: minio/minio:latest
+    container_name: kiki-minio-dev
+    command: server /data --console-address ":9001"
+    ports:
+      - "${KIKI_MINIO_PORT:-9000}:9000"
+      - "${KIKI_MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${KIKI_MINIO_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${KIKI_MINIO_SECRET_ACCESS_KEY:-minioadmin}
+    volumes:
+      - minio-dev-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: always
+    networks:
+      - kiki-dev-network
+    profiles:
+      - storage
+
+networks:
+  kiki-dev-network:
+    driver: bridge
+
+volumes:
+  postgres-dev-data:
+    driver: local
+  redis-dev-data:
+    driver: local
+  minio-dev-data:
+    driver: local

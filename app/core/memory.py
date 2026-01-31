@@ -7,22 +7,63 @@
 from __future__ import annotations
 
 import json
+import re
 from abc import ABC, abstractmethod
 from datetime import timedelta
-from typing import Any, Optional
-from collections.abc import AsyncIterator
+from functools import lru_cache
+from typing import Any
 
-from pydantic import BaseModel
 from langchain_core.messages import BaseMessage
+from pydantic import BaseModel
 
-from app.core.redis import RedisCache, get_cache
-from app.core.logging import get_logger
-
+from app.infra.redis import RedisCache
+from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
+# 预编译正则表达式（性能优化）
+_CHINESE_PATTERN = re.compile(r"[\u4e00-\u9fff]")
+_ENGLISH_PATTERN = re.compile(r"\b[a-zA-Z]+\b")
+
+# 尝试使用 orjson（比标准 json 快 2-3 倍）
+try:
+    import orjson
+
+    def _json_dumps(obj: Any, *, ensure_ascii: bool = False) -> str:
+        """使用 orjson 进行序列化
+
+        Args:
+            obj: 要序列化的对象
+            ensure_ascii: 是否确保 ASCII（orjson 默认不转义 Unicode）
+
+        Returns:
+            JSON 字符串
+        """
+        # orjson.dumps 返回 bytes，需要解码
+        return orjson.dumps(obj).decode("utf-8")
+
+    def _json_loads(s: str | bytes) -> Any:
+        """使用 orjson 进行反序列化
+
+        Args:
+            s: JSON 字符串或字节
+
+        Returns:
+            解析后的对象
+        """
+        return orjson.loads(s)
+
+    logger.info("using_orjson", performance="2-3x faster than standard json")
+
+except ImportError:
+    # 降级到标准 json
+    _json_dumps = json.dumps  # type: ignore
+    _json_loads = json.loads  # type: ignore
+    logger.warning("orjson_not_available, using_standard_json")
+
 
 # ============== 数据模型 ==============
+
 
 class ChatMessage(BaseModel):
     """聊天消息模型"""
@@ -56,8 +97,8 @@ class ChatMessage(BaseModel):
             BaseMessage 实例
         """
         from langchain_core.messages import (
-            HumanMessage,
             AIMessage,
+            HumanMessage,
             SystemMessage,
             ToolMessage,
         )
@@ -78,6 +119,7 @@ class ChatMessage(BaseModel):
 
 
 # ============== 存储接口 ==============
+
 
 class ContextStorage(ABC):
     """会话上下文存储接口
@@ -131,6 +173,7 @@ class ContextStorage(ABC):
 
 # ============== Redis 存储 ==============
 
+
 class RedisContextStorage(ContextStorage):
     """Redis 会话上下文存储
 
@@ -163,9 +206,9 @@ class RedisContextStorage(ContextStorage):
             messages: 消息列表
         """
         try:
-            # 序列化为 JSON
+            # 序列化为 JSON（使用 orjson 优化）
             data = [msg.model_dump(mode="json") for msg in messages]
-            json_str = json.dumps(data, ensure_ascii=False)
+            json_str = _json_dumps(data, ensure_ascii=False)
 
             # 保存到 Redis
             await self._cache.set(session_id, json_str, ttl=self._ttl)
@@ -197,8 +240,8 @@ class RedisContextStorage(ContextStorage):
                 logger.debug("redis_context_not_found", session_id=session_id)
                 return []
 
-            # 反序列化
-            data = json.loads(json_str)
+            # 反序列化（使用 orjson 优化）
+            data = _json_loads(json_str)
             messages = [ChatMessage(**item) for item in data]
 
             logger.debug(
@@ -246,6 +289,7 @@ class RedisContextStorage(ContextStorage):
 
 # ============== 内存存储 ==============
 
+
 class MemoryContextStorage(ContextStorage):
     """内存会话上下文存储
 
@@ -264,9 +308,7 @@ class MemoryContextStorage(ContextStorage):
             messages: 消息列表
         """
         # 深拷贝避免外部修改
-        self._storage[session_id] = [
-            ChatMessage(**msg.model_dump()) for msg in messages
-        ]
+        self._storage[session_id] = [ChatMessage(**msg.model_dump()) for msg in messages]
 
         logger.debug(
             "memory_context_saved",
@@ -323,6 +365,7 @@ class MemoryContextStorage(ContextStorage):
 
 
 # ============== 上下文管理器 ==============
+
 
 class ContextManager:
     """会话上下文管理器
@@ -487,10 +530,28 @@ class ContextManager:
         )
         return compressed
 
-    def _estimate_tokens(self, messages: list[ChatMessage]) -> int:
-        """估算 Token 数量
+    @lru_cache(maxsize=1000)
+    def _estimate_tokens_cached(self, content: str) -> int:
+        """估算单条消息的 Token 数量（带缓存）
 
-        简单估算：中文字符 * 1.5 + 英文单词 * 1
+        使用预编译的正则表达式，避免重复编译开销。
+        常见内容会被缓存，减少重复计算。
+
+        Args:
+            content: 消息内容
+
+        Returns:
+            估算的 Token 数
+        """
+        # 单次扫描，使用预编译正则
+        chinese_chars = len(_CHINESE_PATTERN.findall(content))
+        english_words = len(_ENGLISH_PATTERN.findall(content))
+        return int(chinese_chars * 1.5 + english_words)
+
+    def _estimate_tokens(self, messages: list[ChatMessage]) -> int:
+        """估算消息列表的 Token 数量
+
+        使用缓存版本的估算函数，减少重复内容的计算开销。
 
         Args:
             messages: 消息列表
@@ -498,18 +559,7 @@ class ContextManager:
         Returns:
             估算的 Token 数
         """
-        import re
-
-        total = 0
-        for msg in messages:
-            content = msg.content
-            # 中文字符
-            chinese_chars = len(re.findall(r"[\u4e00-\u9fff]", content))
-            # 英文单词
-            english_words = len(re.findall(r"\b[a-zA-Z]+\b", content))
-            total += int(chinese_chars * 1.5 + english_words)
-
-        return total
+        return sum(self._estimate_tokens_cached(msg.content) for msg in messages)
 
 
 # ============== 工厂函数 ==============
@@ -520,8 +570,8 @@ _manager: ContextManager | None = None
 
 
 def get_context_storage(
-    storage_type: str = "memory",
-    ttl: timedelta = timedelta(hours=24),
+    storage_type: str | None = None,
+    ttl: timedelta | None = None,
 ) -> ContextStorage:
     """获取上下文存储实例
 
@@ -535,23 +585,29 @@ def get_context_storage(
     global _storage
 
     if _storage is None:
-        if storage_type == "redis":
-            _storage = RedisContextStorage(ttl=ttl)
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        resolved_storage_type = storage_type or settings.context_storage_type
+        resolved_ttl = ttl or timedelta(hours=settings.context_ttl_hours)
+
+        if resolved_storage_type == "redis":
+            _storage = RedisContextStorage(ttl=resolved_ttl)
         else:
             _storage = MemoryContextStorage()
 
         logger.info(
             "context_storage_initialized",
-            storage_type=storage_type,
+            storage_type=resolved_storage_type,
         )
 
     return _storage
 
 
 def get_context_manager(
-    storage_type: str = "memory",
-    max_messages: int = 100,
-    max_tokens: int = 128_000,
+    storage_type: str | None = None,
+    max_messages: int | None = None,
+    max_tokens: int | None = None,
 ) -> ContextManager:
     """获取上下文管理器实例
 
@@ -566,11 +622,16 @@ def get_context_manager(
     global _manager
 
     if _manager is None:
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        resolved_max_messages = max_messages or settings.context_max_messages
+        resolved_max_tokens = max_tokens or settings.context_max_tokens
         storage = get_context_storage(storage_type=storage_type)
         _manager = ContextManager(
             storage=storage,
-            max_messages=max_messages,
-            max_tokens=max_tokens,
+            max_messages=resolved_max_messages,
+            max_tokens=resolved_max_tokens,
         )
 
     return _manager

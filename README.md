@@ -51,6 +51,8 @@ kiki/
 - [架构设计](AGENTS.md) - 企业级架构指南
 - [API 文档](docs/api.md) - API 参考
 - [开发指南](docs/development.md) - 开发规范
+- [路线图](docs/ROADMAP.md) - 版本规划和后续功能
+- [可观测性增强](docs/OBSERVABILITY_GUIDE.md) - ELK、Prometheus、限流、缓存
 
 ## 许可证
 

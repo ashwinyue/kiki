@@ -3,29 +3,27 @@
 提供数据库连接池、会话管理和事务处理。
 """
 
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Callable, Any
+from typing import Any
 
-from sqlmodel import SQLModel, create_engine, Session
 from sqlalchemy.ext.asyncio import (
-    AsyncSession,
     AsyncEngine,
-    create_async_engine,
+    AsyncSession,
     async_sessionmaker,
+    create_async_engine,
 )
+from sqlmodel import SQLModel, create_engine
 
 from app.core.config import get_settings
-from app.core.logging import get_logger
+from app.observability.logging import get_logger
 from app.repositories import (
-    BaseRepository,
-    PaginationParams,
-    PaginatedResult,
-    UserRepository,
+    MessageRepository,
+    MCPServiceRepository,
     SessionRepository,
     ThreadRepository,
-    MessageRepository,
+    UserRepository,
 )
-
 
 logger = get_logger(__name__)
 
@@ -54,12 +52,17 @@ def get_sync_engine():
         if db_url.startswith("postgresql+asyncpg://"):
             db_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
 
-        _sync_engine = create_engine(
-            db_url,
-            echo=settings.database_echo,
-            pool_size=20,
-            max_overflow=10,
-        )
+        # SQLite 不支持 pool_size 和 max_overflow
+        if db_url.startswith("sqlite"):
+            engine_args = {"echo": settings.database_echo}
+        else:
+            engine_args = {
+                "echo": settings.database_echo,
+                "pool_size": 20,
+                "max_overflow": 10,
+            }
+
+        _sync_engine = create_engine(db_url, **engine_args)
         logger.info("sync_db_engine_created")
     return _sync_engine
 
@@ -110,10 +113,12 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
+        finally:
+            await session.close()
 
 
 @asynccontextmanager
-async def session_scope() -> AsyncGenerator[AsyncSession, None]:
+async def session_scope() -> AsyncGenerator[AsyncSession]:
     """会话作用域上下文管理器
 
     Yields:
@@ -130,7 +135,6 @@ async def session_scope() -> AsyncGenerator[AsyncSession, None]:
 
 def init_db():
     """初始化数据库（创建表）"""
-    from app.models.database import User, ChatSession, Thread, Message, Memory
 
     engine = get_sync_engine()
     SQLModel.metadata.create_all(engine)
@@ -138,6 +142,7 @@ def init_db():
 
 
 # ============== 事务辅助方法 ==============
+
 
 async def transaction(
     func: Callable[[AsyncSession], Any],
@@ -164,6 +169,7 @@ async def transaction(
 
 
 # ============== 仓储工厂方法 ==============
+
 
 def user_repository(session: AsyncSession) -> UserRepository:
     """创建用户仓储
@@ -201,6 +207,18 @@ def thread_repository(session: AsyncSession) -> ThreadRepository:
     return ThreadRepository(session)
 
 
+def mcp_service_repository(session: AsyncSession) -> MCPServiceRepository:
+    """创建 MCP 服务仓储
+
+    Args:
+        session: 数据库会话
+
+    Returns:
+        MCPServiceRepository 实例
+    """
+    return MCPServiceRepository(session)
+
+
 def message_repository(session: AsyncSession) -> MessageRepository:
     """创建消息仓储
 
@@ -215,6 +233,7 @@ def message_repository(session: AsyncSession) -> MessageRepository:
 
 # ============== 健康检查 ==============
 
+
 async def health_check() -> bool:
     """检查数据库连接健康状态
 
@@ -224,6 +243,7 @@ async def health_check() -> bool:
     try:
         async with session_scope() as session:
             from sqlalchemy import text
+
             await session.execute(text("SELECT 1"))
         return True
     except Exception as e:
@@ -232,6 +252,7 @@ async def health_check() -> bool:
 
 
 # ============== 便捷函数 ==============
+
 
 async def close_db():
     """关闭数据库连接"""

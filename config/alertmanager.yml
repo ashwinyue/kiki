@@ -1,0 +1,72 @@
+# Alertmanager 配置文件
+
+global:
+  # SMTP 配置（用于邮件告警）
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alertmanager@kiki.dev'
+  smtp_auth_username: 'alertmanager@kiki.dev'
+  smtp_auth_password: 'password'
+
+# 路由配置
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+
+  # 子路由
+  routes:
+    # API 告警
+    - match:
+        severity: critical
+      receiver: 'api-critical'
+      continue: true
+
+    # 业务告警
+    - match:
+        service: kiki-api
+      receiver: 'kiki-team'
+
+    # 资源告警
+    - match_re:
+        alertname: '^(HighMemoryUsage|HighCPUUsage|DiskSpaceLow)'
+      receiver: 'infra-team'
+
+# 接收器配置
+receivers:
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts'
+
+  - name: 'api-critical'
+    webhook_configs:
+      - url: 'http://localhost:5001/critical-alerts'
+    email_configs:
+      - to: 'api-team@kiki.dev'
+        headers:
+          Subject: '🚨 [CRITICAL] API Alert'
+
+  - name: 'kiki-team'
+    webhook_configs:
+      - url: 'http://localhost:5001/kiki-alerts'
+
+  - name: 'infra-team'
+    webhook_configs:
+      - url: 'http://localhost:5001/infra-alerts'
+
+# 抑制规则
+inhibit_rules:
+  # 如果内存使用率过高，抑制低内存告警
+  - source_match:
+      alertname: 'HighMemoryUsage'
+    target_match:
+      alertname: 'LowMemory'
+    equal: ['instance']
+
+  # 如果服务宕机，抑制该服务的所有告警
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['service']

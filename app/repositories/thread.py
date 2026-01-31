@@ -3,14 +3,11 @@
 提供线程相关的数据访问操作。
 """
 
-from typing import Any
-
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.database import Thread, ThreadCreate
-from app.repositories.base import BaseRepository, PaginationParams, PaginatedResult
-from app.core.logging import get_logger
+from app.models.database import Thread
+from app.observability.logging import get_logger
+from app.repositories.base import BaseRepository, PaginatedResult, PaginationParams
 
 logger = get_logger(__name__)
 

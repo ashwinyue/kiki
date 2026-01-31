@@ -1,43 +1,37 @@
 """Agent 仓储模块
 
-提供 Agent、Tool、Memory 等数据访问层。
+提供 Agent、Memory 等数据访问层。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from sqlmodel import Session, select
 from sqlalchemy import desc
+from sqlmodel import Session, select
 
 from app.models.agent import (
     Agent,
     AgentCreate,
+    AgentExecution,
+    AgentExecutionCreate,
+    AgentStatus,
+    AgentType,
     AgentUpdate,
-    Tool,
-    ToolCreate,
-    ToolUpdate,
     PromptTemplate,
     PromptTemplateCreate,
     PromptTemplateUpdate,
-    AgentTool,
-    AgentExecution,
-    AgentExecutionCreate,
-    AgentType,
-    AgentStatus,
 )
 from app.models.database import (
     Memory,
-    MemoryCreate,
-    MemoryUpdate,
 )
-from app.core.logging import get_logger
-
+from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 # ============== Agent 仓储 ==============
+
 
 class AgentRepository:
     """Agent 仓储
@@ -57,15 +51,9 @@ class AgentRepository:
         Returns:
             创建的 Agent
         """
-        agent = Agent(**data.model_dump(exclude={"tool_ids"}))
+        agent = Agent(**data.model_dump())
         self._session.add(agent)
         self._session.flush()
-
-        # 关联工具
-        if data.tool_ids:
-            for tool_id in data.tool_ids:
-                agent_tool = AgentTool(agent_id=agent.id, tool_id=tool_id)
-                self._session.add(agent_tool)
 
         logger.info("agent_created", agent_id=agent.id, name=agent.name)
         return agent
@@ -149,111 +137,10 @@ class AgentRepository:
         self._session.flush()
         logger.info("agent_deleted", agent_id=agent.id)
 
-    def add_tool(self, agent: Agent, tool_id: int, enabled: bool = True) -> AgentTool:
-        """为 Agent 添加工具
-
-        Args:
-            agent: Agent 实例
-            tool_id: 工具 ID
-            enabled: 是否启用
-
-        Returns:
-            AgentTool 关联实例
-        """
-        agent_tool = AgentTool(
-            agent_id=agent.id,
-            tool_id=tool_id,
-            enabled=enabled,
-        )
-        self._session.add(agent_tool)
-        self._session.flush()
-        logger.info("tool_added_to_agent", agent_id=agent.id, tool_id=tool_id)
-        return agent_tool
-
-    def remove_tool(self, agent: Agent, tool_id: int) -> None:
-        """从 Agent 移除工具
-
-        Args:
-            agent: Agent 实例
-            tool_id: 工具 ID
-        """
-        statement = select(AgentTool).where(
-            AgentTool.agent_id == agent.id,
-            AgentTool.tool_id == tool_id,
-        )
-        agent_tool = self._session.exec(statement).first()
-        if agent_tool:
-            self._session.delete(agent_tool)
-            self._session.flush()
-            logger.info("tool_removed_from_agent", agent_id=agent.id, tool_id=tool_id)
-
-    def get_tools(self, agent: Agent) -> list[Tool]:
-        """获取 Agent 的工具列表
-
-        Args:
-            agent: Agent 实例
-
-        Returns:
-            工具列表
-        """
-        statement = (
-            select(Tool)
-            .join(AgentTool)
-            .where(AgentTool.agent_id == agent.id, AgentTool.enabled == True)
-        )
-        return self._session.exec(statement).all()
-
-
-# ============== Tool 仓储 ==============
-
-class ToolRepository:
-    """工具仓储"""
-
-    def __init__(self, session: Session) -> None:
-        self._session = session
-
-    def create(self, data: ToolCreate) -> Tool:
-        """创建工具"""
-        tool = Tool(**data.model_dump())
-        self._session.add(tool)
-        self._session.flush()
-        logger.info("tool_created", tool_id=tool.id, name=tool.name)
-        return tool
-
-    def get(self, tool_id: int) -> Tool | None:
-        """获取工具"""
-        return self._session.get(Tool, tool_id)
-
-    def get_by_name(self, name: str) -> Tool | None:
-        """根据名称获取工具"""
-        statement = select(Tool).where(Tool.name == name)
-        return self._session.exec(statement).first()
-
-    def list(
-        self,
-        is_active: bool | None = None,
-        offset: int = 0,
-        limit: int = 100,
-    ) -> list[Tool]:
-        """列出工具"""
-        statement = select(Tool)
-
-        if is_active is not None:
-            statement = statement.where(Tool.is_active == is_active)
-
-        statement = statement.offset(offset).limit(limit)
-        return self._session.exec(statement).all()
-
-    def update(self, tool: Tool, data: ToolUpdate) -> Tool:
-        """更新工具"""
-        for field, value in data.model_dump(exclude_unset=True).items():
-            setattr(tool, field, value)
-        self._session.flush()
-        logger.info("tool_updated", tool_id=tool.id)
-        return tool
 
 
 # ============== Memory 仓储（LangGraph Store）=============
+
 
 class MemoryRepository:
     """记忆仓储
@@ -342,6 +229,7 @@ class MemoryRepository:
 
 # ============== PromptTemplate 仓储 ==============
 
+
 class PromptTemplateRepository:
     """Prompt 模板仓储"""
 
@@ -392,6 +280,7 @@ class PromptTemplateRepository:
 
 # ============== AgentExecution 仓储 ==============
 
+
 class AgentExecutionRepository:
     """Agent 执行历史仓储"""
 
@@ -409,16 +298,18 @@ class AgentExecutionRepository:
         """获取执行记录"""
         return self._session.get(AgentExecution, execution_id)
 
-    def list_by_session(
+    def list_by_thread(
         self,
-        session_id: str,
+        thread_id: str,
         offset: int = 0,
         limit: int = 100,
     ) -> list[AgentExecution]:
-        """列出会话的执行记录"""
-        statement = select(AgentExecution).where(
-            AgentExecution.session_id == session_id
-        ).order_by(desc(AgentExecution.created_at))
+        """列出线程的执行记录"""
+        statement = (
+            select(AgentExecution)
+            .where(AgentExecution.thread_id == thread_id)
+            .order_by(desc(AgentExecution.created_at))
+        )
 
         statement = statement.offset(offset).limit(limit)
         return self._session.exec(statement).all()
@@ -430,15 +321,18 @@ class AgentExecutionRepository:
         limit: int = 100,
     ) -> list[AgentExecution]:
         """列出 Agent 的执行记录"""
-        statement = select(AgentExecution).where(
-            AgentExecution.agent_id == agent_id
-        ).order_by(desc(AgentExecution.created_at))
+        statement = (
+            select(AgentExecution)
+            .where(AgentExecution.agent_id == agent_id)
+            .order_by(desc(AgentExecution.created_at))
+        )
 
         statement = statement.offset(offset).limit(limit)
         return self._session.exec(statement).all()
 
 
 # ============== LangGraph Store 适配器 ==============
+
 
 class StoreAdapter:
     """LangGraph Store 适配器

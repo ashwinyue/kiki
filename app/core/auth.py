@@ -5,15 +5,14 @@
 
 import re
 from datetime import UTC, datetime, timedelta
-from typing import Optional, TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated
 
-from jose import JWTError, jwt
 from fastapi import Depends
-
-from app.core.config import get_settings
-from app.core.logging import get_logger
+from jose import JWTError, jwt
 from pydantic import BaseModel
 
+from app.core.config import get_settings
+from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -47,15 +46,15 @@ def create_access_token(
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(UTC) + timedelta(
-            minutes=settings.access_token_expire_minutes
-        )
+        expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
 
-    to_encode.update({
-        "exp": expire,
-        "iat": datetime.now(UTC),
-        "jti": f"{to_encode.get('sub', 'unknown')}-{datetime.now(UTC).timestamp()}",
-    })
+    to_encode.update(
+        {
+            "exp": expire,
+            "iat": datetime.now(UTC),
+            "jti": f"{to_encode.get('sub', 'unknown')}-{datetime.now(UTC).timestamp()}",
+        }
+    )
 
     # 编码 JWT
     encoded_jwt = jwt.encode(
@@ -126,7 +125,7 @@ def decode_token(token: str) -> dict | None:
         return None
 
 
-def get_token_sub(token: str) -> Optional[str]:
+def get_token_sub(token: str) -> str | None:
     """从 Token 获取用户标识
 
     Args:
@@ -135,7 +134,11 @@ def get_token_sub(token: str) -> Optional[str]:
     Returns:
         用户标识（sub），验证失败返回 None
     """
-    payload = verify_token(token)
+    try:
+        payload = verify_token(token)
+    except ValueError:
+        return None
+
     if payload:
         return payload.get("sub")
     return None
@@ -175,7 +178,10 @@ async def get_current_user(
         raise credentials_exception
 
     token = parts[1]
-    payload = verify_token(token)
+    try:
+        payload = verify_token(token)
+    except ValueError:
+        raise credentials_exception
 
     if payload is None:
         raise credentials_exception

@@ -4,19 +4,19 @@
 支持用户偏好、对话历史等持久化数据。
 """
 
-import logging
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
-from app.core.logging import get_logger
+from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 # ============== Store 接口实现 ==============
+
 
 class PostgresStore:
     """PostgreSQL 实现的 LangGraph Store
@@ -55,9 +55,7 @@ class PostgresStore:
                 LIMIT 1
                 """
             )
-            result = await self.session.execute(
-                query, {"namespace": namespace, "key": key}
-            )
+            result = await self.session.execute(query, {"namespace": namespace, "key": key})
             row = result.fetchone()
             if row:
                 logger.debug("store_get_found", namespace=namespace, key=key)
@@ -123,9 +121,7 @@ class PostgresStore:
                 WHERE namespace = :namespace AND key = :key
                 """
             )
-            await self.session.execute(
-                query, {"namespace": namespace, "key": key}
-            )
+            await self.session.execute(query, {"namespace": namespace, "key": key})
             await self.session.commit()
             logger.debug("store_delete_success", namespace=namespace, key=key)
 
@@ -157,16 +153,12 @@ class PostgresStore:
                 LIMIT :limit
                 """
             )
-            result = await self.session.execute(
-                query, {"prefix": namespace_prefix, "limit": limit}
-            )
+            result = await self.session.execute(query, {"prefix": namespace_prefix, "limit": limit})
             for row in result:
                 yield (row[0], row[1], row[2])
 
         except Exception as e:
-            logger.error(
-                "store_search_failed", namespace_prefix=namespace_prefix, error=str(e)
-            )
+            logger.error("store_search_failed", namespace_prefix=namespace_prefix, error=str(e))
 
     async def alist_namespaces(self, prefix: str = "", limit: int = 100) -> list[str]:
         """列出所有命名空间
@@ -188,9 +180,7 @@ class PostgresStore:
                 LIMIT :limit
                 """
             )
-            result = await self.session.execute(
-                query, {"prefix": prefix, "limit": limit}
-            )
+            result = await self.session.execute(query, {"prefix": prefix, "limit": limit})
             return [row[0] for row in result]
 
         except Exception as e:
@@ -224,6 +214,7 @@ class PostgresStore:
 
 # ============== 工厂函数 ==============
 
+
 async def create_store(session: AsyncSession) -> PostgresStore:
     """创建 Store 实例
 
@@ -237,6 +228,7 @@ async def create_store(session: AsyncSession) -> PostgresStore:
 
 
 # ============== 内存 Store（开发用）=============
+
 
 class InMemoryStore:
     """内存存储实现
@@ -277,9 +269,7 @@ class InMemoryStore:
 
     async def alist_namespaces(self, prefix: str = "", limit: int = 100) -> list[str]:
         """列出命名空间"""
-        return [
-            ns for ns in self._data.keys()
-            if ns.startswith(prefix)][:limit]
+        return [ns for ns in self._data.keys() if ns.startswith(prefix)][:limit]
 
     async def akeys(self, namespace: str) -> list[str]:
         """列出键"""
@@ -287,6 +277,7 @@ class InMemoryStore:
 
 
 # ============== 辅助函数 ==============
+
 
 def user_namespace(user_id: int | str) -> str:
     """生成用户命名空间
@@ -325,6 +316,7 @@ def agent_namespace(agent_id: str) -> str:
 
 
 # ============== 预定义键名 ==============
+
 
 class StoreKeys:
     """预定义的存储键名"""

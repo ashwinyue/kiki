@@ -1,0 +1,58 @@
+# Kiki Agent 生产环境 Docker Compose 配置
+# 使用方式: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  # 应用服务覆盖配置
+  app:
+    build:
+      args:
+        APP_ENV: production
+    environment:
+      KIKI_ENVIRONMENT: production
+      KIKI_DEBUG: "false"
+      KIKI_LOG_LEVEL: INFO
+    restart: always
+    # 生产环境不挂载代码目录
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    # 多实例部署
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # 使用 nginx 负载均衡时移除端口暴露
+    # ports:
+    #   - "8000:8000"
+    networks:
+      - kiki-network
+      - kiki-frontend
+
+  # Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: kiki-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - kiki-network
+      - kiki-frontend
+    restart: always
+
+networks:
+  kiki-frontend:
+    driver: bridge

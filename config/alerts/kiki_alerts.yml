@@ -1,0 +1,102 @@
+# Prometheus 告警规则
+
+groups:
+  - name: kiki_api_alerts
+    interval: 30s
+    rules:
+      # API 错误率告警
+      - alert: HighErrorRate
+        expr: |
+          (
+            rate(http_requests_total{status=~"5.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API 错误率过高"
+          description: "{{ $labels.instance }} 的错误率超过 5%"
+
+      # API 响应时间告警
+      - alert: SlowResponseTime
+        expr: |
+          histogram_quantile(0.95, http_request_duration_seconds_bucket) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API 响应时间过长"
+          description: "P95 响应时间超过 1 秒"
+
+      # LLM 调用失败率告警
+      - alert: HighLLMErrorRate
+        expr: |
+          (
+            rate(llm_requests_total{status="error"}[5m])
+            /
+            rate(llm_requests_total[5m])
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM 调用失败率过高"
+          description: "LLM 调用失败率超过 10%"
+
+  - name: kiki_resource_alerts
+    interval: 30s
+    rules:
+      # 内存使用率告警
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            process_resident_memory_bytes
+            /
+            node_memory_MemTotal_bytes
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "内存使用率过高"
+          description: "内存使用率超过 80%"
+
+      # Redis 连接数告警
+      - alert: HighRedisConnections
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis 连接数过多"
+          description: "Redis 连接数超过 100"
+
+  - name: kiki_business_alerts
+    interval: 1m
+    rules:
+      # Agent 执行失败率告警
+      - alert: HighAgentFailureRate
+        expr: |
+          (
+            rate(agent_executions_total{status="failed"}[10m])
+            /
+            rate(agent_executions_total[10m])
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent 执行失败率过高"
+          description: "Agent 执行失败率超过 20%"
+
+      # 活跃会话数告警
+      - alert: HighActiveSessions
+        expr: active_sessions_total > 1000
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "活跃会话数较高"
+          description: "活跃会话数超过 1000"

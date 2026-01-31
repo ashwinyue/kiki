@@ -4,12 +4,11 @@
 """
 
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
-from app.core.logging import get_logger
 from app.core.config import get_settings
-
+from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
