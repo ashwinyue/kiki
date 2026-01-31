@@ -22,7 +22,7 @@ from app.rate_limit.limiter import RateLimit, limiter
 from app.agent.memory.context import get_context_manager
 from app.auth.middleware import TenantIdDep
 from app.observability.logging import get_logger
-from app.services.database import session_repository, session_scope
+from app.tools.database import session_repository, session_scope
 
 logger = get_logger(__name__)
 

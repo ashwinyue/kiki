@@ -42,7 +42,7 @@ async def _register_mcp_services_from_db(tenant_id: int | None) -> None:
     """从数据库注册 MCP 服务"""
     try:
         from app.agent.tools.mcp import register_mcp_from_config
-        from app.services.database import mcp_service_repository, session_scope
+        from app.tools.database import mcp_service_repository, session_scope
 
         async with session_scope() as session:
             repo = mcp_service_repository(session)

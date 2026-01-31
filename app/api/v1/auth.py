@@ -23,7 +23,7 @@ from app.schemas.auth import (
     UserWithTokenResponse,
 )
 from app.services.auth import get_auth_service
-from app.services.database import session_scope
+from app.tools.database import session_scope
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -60,7 +60,7 @@ async def get_current_user(
         )
 
     async with session_scope() as session:
-        from app.services.database import user_repository
+        from app.tools.database import user_repository
 
         repo = user_repository(session)
         # Token 中的 sub 是用户 ID（整数）
@@ -110,7 +110,7 @@ async def get_current_user_id(
     except ValueError as err:
         # 如果是 email，查找用户 ID
         async with session_scope() as session:
-            from app.services.database import user_repository
+            from app.tools.database import user_repository
 
             repo = user_repository(session)
             user = await repo.get_by_email(user_id)

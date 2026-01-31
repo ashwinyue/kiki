@@ -15,7 +15,7 @@ from app.rate_limit.limiter import RateLimit, limiter
 from app.auth.middleware import RequiredTenantIdDep
 from app.models.agent import MCPServiceCreate, MCPServiceUpdate
 from app.observability.logging import get_logger
-from app.services.database import get_session
+from app.tools.database import get_session
 from app.services.mcp_service_service import (
     McpServiceService,
     get_mcp_service_service,

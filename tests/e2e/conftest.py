@@ -21,7 +21,7 @@ from app.models.database import (
     Thread,
     User,
 )
-from app.services.database import (
+from app.tools.database import (
     message_repository,
     session_repository,
     user_repository,

@@ -8,6 +8,7 @@
 __all__ = [
     "AuthService",
     "get_auth_service",
+    "TenantService",
     "ApiKeyManagementService",
     "get_api_key_management_service",
     "McpServiceService",
@@ -29,6 +30,10 @@ def __getattr__(name: str):
         if name == "AuthService":
             return AuthService
         return get_auth_service
+
+    if name == "TenantService":
+        from app.services.tenant import TenantService
+        return TenantService
 
     if name == "ApiKeyManagementService" or name == "get_api_key_management_service":
         from app.services.api_key_management_service import (

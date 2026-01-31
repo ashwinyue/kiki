@@ -2,12 +2,20 @@
  * Kiki Agent Framework - 聊天状态管理
  *
  * 使用 Zustand 进行轻量级状态管理
+ * 无需登录模式：使用本地会话ID
  */
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Message, Session } from '@/types/chat';
-import { chat as chatService, auth as authService } from '@/services';
+import { chat as chatService } from '@/services';
+
+/**
+ * 生成简单的会话ID
+ */
+function generateSessionId(): string {
+  return `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
 
 /**
  * 聊天状态接口
@@ -58,60 +66,47 @@ export const useChatStore = create<ChatState>()(
 
       // 创建会话
       createSession: async (name = '新对话') => {
-        try {
-          const response = await authService.createSession({ name });
-          const session: Session = {
-            id: response.session_id,
-            name: response.name,
-            message_count: 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
+        const session: Session = {
+          id: generateSessionId(),
+          name,
+          message_count: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
 
-          set((state) => ({
-            sessions: [...state.sessions, session],
-            currentSessionId: session.id,
-            messages: {
-              ...state.messages,
-              [session.id]: [],
-            },
-          }));
+        set((state) => ({
+          sessions: [...state.sessions, session],
+          currentSessionId: session.id,
+          messages: {
+            ...state.messages,
+            [session.id]: [],
+          },
+        }));
 
-          return session;
-        } catch (error: unknown) {
-          set({ error: (error as Error).message || '创建会话失败' });
-          throw error;
-        }
+        return session;
       },
 
       // 删除会话
       deleteSession: async (sessionId: string) => {
-        try {
-          await authService.deleteSession(sessionId);
+        set((state) => {
+          const newSessions = state.sessions.filter((s) => s.id !== sessionId);
+          const newMessages = { ...state.messages };
+          delete newMessages[sessionId];
 
-          set((state) => {
-            const newSessions = state.sessions.filter((s) => s.id !== sessionId);
-            const newMessages = { ...state.messages };
-            delete newMessages[sessionId];
+          // 如果删除的是当前会话，切换到第一个会话
+          let newCurrentSessionId = state.currentSessionId;
+          if (state.currentSessionId === sessionId && newSessions.length > 0) {
+            newCurrentSessionId = newSessions[0].id;
+          } else if (newSessions.length === 0) {
+            newCurrentSessionId = null;
+          }
 
-            // 如果删除的是当前会话，切换到第一个会话
-            let newCurrentSessionId = state.currentSessionId;
-            if (state.currentSessionId === sessionId && newSessions.length > 0) {
-              newCurrentSessionId = newSessions[0].id;
-            } else if (newSessions.length === 0) {
-              newCurrentSessionId = null;
-            }
-
-            return {
-              sessions: newSessions,
-              currentSessionId: newCurrentSessionId,
-              messages: newMessages,
-            };
-          });
-        } catch (error: unknown) {
-          set({ error: (error as Error).message || '删除会话失败' });
-          throw error;
-        }
+          return {
+            sessions: newSessions,
+            currentSessionId: newCurrentSessionId,
+            messages: newMessages,
+          };
+        });
       },
 
       // 切换会话
@@ -121,22 +116,16 @@ export const useChatStore = create<ChatState>()(
 
       // 加载会话列表
       loadSessions: async () => {
-        try {
-          const sessions = await authService.getSessions();
+        const { sessions, currentSessionId } = get();
 
-          // 如果没有会话，创建一个默认会话
-          if (sessions.length === 0) {
-            const newSession = await get().createSession();
-            sessions.push(newSession);
-          }
-
+        // 如果没有会话，创建一个默认会话
+        if (sessions.length === 0) {
+          const newSession = await get().createSession();
           set({
-            sessions,
-            currentSessionId: get().currentSessionId || sessions[0]?.id || null,
+            currentSessionId: newSession.id,
           });
-        } catch (error: unknown) {
-          set({ error: (error as Error).message || '加载会话失败' });
-          throw error;
+        } else if (!currentSessionId) {
+          set({ currentSessionId: sessions[0]?.id || null });
         }
       },
 
@@ -223,7 +212,7 @@ export const useChatStore = create<ChatState>()(
               },
             }
           );
-        } catch (error: unknown) {
+        } catch (error) {
           set({
             error: (error as Error).message || '发送消息失败',
             isStreaming: false,
@@ -282,30 +271,20 @@ export const useChatStore = create<ChatState>()(
             },
             isLoading: false,
           });
-        } catch (error: unknown) {
-          set({
-            error: (error as Error).message || '加载消息失败',
-            isLoading: false,
-          });
-          throw error;
+        } catch (error) {
+          // 如果加载失败，使用本地消息
+          set({ isLoading: false });
         }
       },
 
       // 清除消息
       clearMessages: async (sessionId: string) => {
-        try {
-          await chatService.clearChatHistory(sessionId);
-
-          set((state) => ({
-            messages: {
-              ...state.messages,
-              [sessionId]: [],
-            },
-          }));
-        } catch (error: unknown) {
-          set({ error: (error as Error).message || '清除消息失败' });
-          throw error;
-        }
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [sessionId]: [],
+          },
+        }));
       },
 
       // 开始流式传输

@@ -10,7 +10,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.api_key import ApiKeyService as CoreApiKeyService
-from app.services.database import get_session
+from app.tools.database import get_session
 from app.models.api_key import (
     ApiKey,
     ApiKeyCreate,

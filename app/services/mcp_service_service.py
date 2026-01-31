@@ -10,7 +10,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.database import get_session
+from app.tools.database import get_session
 
 from app.models.agent import (
     MCPService,

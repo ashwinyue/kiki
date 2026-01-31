@@ -13,7 +13,7 @@ from app.api.v1.agents.schemas import AgentConfig
 from app.config.settings import get_settings
 from app.llm import get_llm_service
 from app.observability.logging import get_logger
-from app.services.database import session_repository, session_scope
+from app.tools.database import session_repository, session_scope
 
 logger = get_logger(__name__)
 

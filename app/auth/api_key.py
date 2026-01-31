@@ -19,7 +19,7 @@ from app.models.api_key import (
 )
 from app.observability.logging import get_logger
 from app.repositories.api_key import ApiKeyRepository
-from app.services.database import get_session
+from app.tools.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)
