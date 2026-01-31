@@ -1,111 +1,141 @@
-"""数据模型定义（SQLModel）"""
+"""数据模型定义（SQLModel）
 
-from app.models.agent import (
-    # Agent
+对齐 WeKnora99 表结构
+"""
+
+# ============== 用户认证 ==============
+from app.models.user import (
+    User,
+    UserCreate,
+    UserPublic,
+    UserUpdate,
+    hash_password,
+    verify_password,
+)
+from app.models.auth_token import (
+    AuthToken,
+    AuthTokenCreate,
+    AuthTokenPublic,
+)
+
+# ============== 租户 ==============
+from app.models.tenant import (
+    Tenant,
+    TenantCreate,
+    TenantPublic,
+    TenantUpdate,
+)
+
+# ============== 会话 ==============
+from app.models.session import (
+    ChatSession,
+    Session,
+    SessionCreate,
+    SessionPublic,
+    SessionUpdate,
+)
+
+# ============== 消息 ==============
+from app.models.message import (
+    Message,
+    MessageCreate,
+    MessagePublic,
+    MessageUpdate,
+)
+
+# ============== 知识库 ==============
+from app.models.knowledge import (
+    # Model
+    Model,
+    ModelCreate,
+    # KnowledgeBase
+    KnowledgeBase,
+    KnowledgeBaseCreate,
+    # Knowledge
+    Knowledge,
+    KnowledgeCreate,
+    # Chunk
+    Chunk,
+    ChunkCreate,
+    # Embedding
+    Embedding,
+    EmbeddingBase,
+    # KnowledgeTag
+    KnowledgeTag,
+    KnowledgeTagCreate,
+)
+
+# ============== Agent ==============
+from app.models.custom_agent import (
     Agent,
     AgentCreate,
-    # AgentExecution
-    AgentExecution,
-    AgentExecutionCreate,
-    AgentExecutionPublic,
     AgentPublic,
-    AgentStatus,
-    AgentType,
     AgentUpdate,
-    # PromptTemplate
-    PromptTemplate,
-    PromptTemplateCreate,
-    PromptTemplatePublic,
-    PromptTemplateUpdate,
-    # MCPService
+    CustomAgent,
+    CustomAgentCreate,
+    CustomAgentPublic,
+    CustomAgentUpdate,
+)
+
+# ============== MCP 服务 ==============
+from app.models.mcp_service import (
     MCPService,
     MCPServiceCreate,
     MCPServicePublic,
     MCPServiceUpdate,
 )
-from app.models.database import (
-    # Session
-    ChatSession as Session,
-)
-from app.models.database import (
-    # Memory (from database.py)
-    Memory,
-    MemoryCreate,
-    MemoryPublic,
-    MemoryUpdate,
-    # Message
-    Message,
-    MessageCreate,
-    MessagePublic,
-    SessionCreate,
-    SessionPublic,
-    Tenant,
-    TenantCreate,
-    TenantPublic,
-    TenantUpdate,
-    # Thread
-    Thread,
-    ThreadCreate,
-    ThreadPublic,
-    # Token
-    Token,
-    TokenPayload,
-    # User
-    User,
-    UserCreate,
-    UserPublic,
-    UserUpdate,
-)
 
 __all__ = [
-    # User
+    # 用户认证
     "User",
     "UserCreate",
     "UserUpdate",
     "UserPublic",
+    "hash_password",
+    "verify_password",
+    "AuthToken",
+    "AuthTokenCreate",
+    "AuthTokenPublic",
+    # 租户
     "Tenant",
     "TenantCreate",
     "TenantUpdate",
     "TenantPublic",
-    # Session
+    # 会话
     "Session",
+    "ChatSession",
     "SessionCreate",
+    "SessionUpdate",
     "SessionPublic",
-    # Thread
-    "Thread",
-    "ThreadCreate",
-    "ThreadPublic",
-    # Message
+    # 消息
     "Message",
     "MessageCreate",
+    "MessageUpdate",
     "MessagePublic",
-    # Memory
-    "Memory",
-    "MemoryCreate",
-    "MemoryUpdate",
-    "MemoryPublic",
-    # Token
-    "Token",
-    "TokenPayload",
+    # 知识库
+    "Model",
+    "ModelCreate",
+    "KnowledgeBase",
+    "KnowledgeBaseCreate",
+    "Knowledge",
+    "KnowledgeCreate",
+    "Chunk",
+    "ChunkCreate",
+    "Embedding",
+    "KnowledgeTag",
+    "KnowledgeTagCreate",
     # Agent
     "Agent",
-    "AgentType",
-    "AgentStatus",
     "AgentCreate",
     "AgentUpdate",
     "AgentPublic",
-    # PromptTemplate
-    "PromptTemplate",
-    "PromptTemplateCreate",
-    "PromptTemplateUpdate",
-    "PromptTemplatePublic",
-    # MCPService
+    "CustomAgent",
+    "CustomAgentCreate",
+    "CustomAgentUpdate",
+    "CustomAgentPublic",
+    # MCP 服务
     "MCPService",
     "MCPServiceCreate",
     "MCPServiceUpdate",
     "MCPServicePublic",
-    # AgentExecution
-    "AgentExecution",
-    "AgentExecutionCreate",
-    "AgentExecutionPublic",
 ]

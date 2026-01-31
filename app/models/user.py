@@ -1,19 +1,36 @@
-"""用户模型"""
+"""用户模型
 
-from datetime import datetime
+对齐 WeKnora99 表结构
+"""
 
-from sqlalchemy import DateTime
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean
 from sqlmodel import Column, Field, SQLModel
+
+
+def hash_password(password: str) -> str:
+    """哈希密码（占位，需要 bcrypt）"""
+    import hashlib
+
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """验证密码（占位）"""
+    import hashlib
+
+    return hash_password(password) == hashed
 
 
 class UserBase(SQLModel):
     """用户基础模型"""
 
-    username: str = Field(index=True, unique=True, max_length=50)
-    email: str | None = Field(default=None, index=True, max_length=255)
-    hashed_password: str = Field(max_length=255)
+    username: str = Field(max_length=100)
+    email: str = Field(max_length=255)
+    avatar: str | None = Field(default=None, max_length=500)
     is_active: bool = Field(default=True)
-    is_superuser: bool = Field(default=False)
+    can_access_all_tenants: bool = Field(default=False)
 
 
 class User(UserBase, table=True):
@@ -21,33 +38,30 @@ class User(UserBase, table=True):
 
     __tablename__ = "users"
 
-    id: int | None = Field(default=None, primary_key=True)
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        sa_column=Column(DateTime(), default=datetime.utcnow),
-    )
-    updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        sa_column=Column(DateTime(), default=datetime.utcnow, onupdate=datetime.utcnow),
-    )
+    id: str = Field(default=None, primary_key=True, max_length=36)  # UUID
+    password_hash: str = Field(max_length=255)
+    tenant_id: int | None = Field(default=None)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    deleted_at: datetime | None = Field(default=None)
+
+    def verify_password(self, password: str) -> bool:
+        """验证密码"""
+        return verify_password(password, self.password_hash)
+
+    def set_password(self, password: str) -> None:
+        """设置密码（哈希）"""
+        self.password_hash = hash_password(password)
 
 
 class UserCreate(SQLModel):
     """用户创建模型"""
 
     username: str
-    email: str | None = None
+    email: str
     password: str
-
-
-class UserRead(SQLModel):
-    """用户读取模型"""
-
-    id: int
-    username: str
-    email: str | None = None
-    is_active: bool
-    created_at: datetime
+    avatar: str | None = None
+    tenant_id: int | None = None
 
 
 class UserUpdate(SQLModel):
@@ -55,3 +69,13 @@ class UserUpdate(SQLModel):
 
     email: str | None = None
     password: str | None = None
+    avatar: str | None = None
+    is_active: bool | None = None
+
+
+class UserPublic(UserBase):
+    """用户公开信息"""
+
+    id: str
+    tenant_id: int | None
+    created_at: datetime

@@ -32,6 +32,8 @@ help:
 	@echo ""
 	@echo "  数据库操作:"
 	@echo "    make db-shell      - 进入 PostgreSQL shell"
+	@echo "    make db-rebuild    - 重建数据库 (使用 WeKnora99 表结构)"
+	@echo "    make db-rebuild-force - 重建数据库 (跳过确认)"
 	@echo "    make redis-shell   - 进入 Redis shell"
 	@echo ""
 	@echo "  其他:"
@@ -136,6 +138,20 @@ backend-format:
 # 数据库 shell
 db-shell:
 	docker-compose -f docker-compose.dev.yml exec db psql -U kiki -d kiki
+
+# 重建数据库 (使用 WeKnora99 表结构)
+db-rebuild:
+	@echo "重建数据库..."
+	@read -p "确认重建数据库 'kiki'？[yes/NO] " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		./scripts/rebuild_db.sh kiki postgres; \
+	else \
+		echo "❌ 操作已取消"; \
+	fi
+
+# 重建数据库 (跳过确认)
+db-rebuild-force:
+	./scripts/rebuild_db.sh kiki postgres
 
 # Redis shell
 redis-shell:
