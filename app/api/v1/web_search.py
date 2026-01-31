@@ -19,7 +19,7 @@ from app.schemas.web_search import (
     WebSearchRequest,
     WebSearchResponse,
 )
-from app.services.web_search import get_web_search_service
+from app.services.web.web_search import get_web_search_service
 
 logger = get_logger(__name__)
 

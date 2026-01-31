@@ -4,7 +4,7 @@
 
 配置说明:
     - 使用 Redis 作为 broker
-    - 使用 PostgreSQL 作为结果存储
+    - 使用 Redis 作为结果存储
     - 支持三个优先级队列: critical, default, low
     - 支持任务重试和超时控制
 
@@ -49,8 +49,7 @@ class CeleryConfig:
     broker_connection_retry_on_startup: bool = True
     broker_pool_limit: int = 10
 
-    # 结果存储 (PostgreSQL 或 Redis)
-    # 使用 Redis 存储结果，PostgreSQL 存储任务状态
+    # 结果存储 (Redis)
     result_backend: str = settings.redis_url
     result_extended: bool = True
     result_expires: int = 86400  # 24 小时
@@ -111,7 +110,7 @@ class CeleryConfig:
         "cleanup-completed-tasks": {
             "task": "tasks.cleanup",
             "schedule": crontab(hour=2, minute=0),  # 每天凌晨 2 点执行
-            "args": (7),  # 清理 7 天前的任务
+            "args": (7,),  # 清理 7 天前的任务
         },
     }
 
@@ -173,21 +172,10 @@ def get_celery_app() -> Celery:
 
 
 class DatabaseTask(Task):
-    """数据库支持的任务基类
+    """任务基类
 
-    为任务提供数据库会话和状态管理能力。
+    保留类名以兼容现有任务定义，任务状态由 Redis 存储。
     """
-
-    _db = None
-
-    @property
-    def db(self):
-        """获取数据库会话"""
-        if self._db is None:
-            from app.infra.database import get_session_factory
-
-            self._db = get_session_factory()
-        return self._db
 
     def on_success(self, retval, task_id, args, kwargs):
         """任务成功回调"""

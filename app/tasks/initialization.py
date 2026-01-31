@@ -11,7 +11,7 @@ from typing import Any
 from app.infra.database import _get_session_factory
 from app.observability.logging import get_logger
 from app.schemas.knowledge_initialization import InitializationStatus
-from app.services.knowledge_initialization import (
+from app.services.knowledge.knowledge_initialization import (
     KnowledgeInitializationService,
 )
 

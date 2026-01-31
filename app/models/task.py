@@ -1,18 +1,7 @@
-"""异步任务状态模型
+"""异步任务状态模型.
 
-对齐 WeKnora99 的任务状态管理，支持任务持久化和进度追踪。
-任务状态存储在数据库中，与 Celery 任务队列配合使用。
-
-任务表设计:
-    - tasks: 任务主表，存储任务状态和进度
-    - task_logs: 任务日志表，存储任务执行日志
-
-使用 Celery + PostgreSQL 实现任务队列:
-    - Celery 负责任务调度和执行
-    - PostgreSQL 负责任务状态持久化
-    - 任务执行前在数据库创建记录
-    - 任务执行中更新进度
-    - 任务完成后更新最终状态
+对齐 WeKnora99 的任务状态管理，支持任务状态与进度追踪。
+任务状态当前由 Redis 持久化，SQLModel 主要用于 API Schema 复用。
 """
 
 from datetime import UTC, datetime

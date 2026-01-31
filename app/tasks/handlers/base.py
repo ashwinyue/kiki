@@ -1,17 +1,13 @@
-"""任务处理器基类和工具函数
+"""任务处理器基类和工具函数.
 
-提供任务状态管理和进度更新的通用功能。
+使用 Redis 作为任务状态存储，提供任务状态管理和进度更新能力。
 """
 
-import time
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.task import Task, TaskCreate, TaskLog, TaskLogCreate
 from app.observability.logging import get_logger
+from app.tasks.store import TaskStore
 
 logger = get_logger(__name__)
 
@@ -25,7 +21,6 @@ class TaskHandler:
     def __init__(
         self,
         celery_task,
-        session: AsyncSession,
         task_id: str,
         tenant_id: int,
     ):
@@ -33,29 +28,19 @@ class TaskHandler:
 
         Args:
             celery_task: Celery 任务实例
-            session: 数据库会话
             task_id: 任务 ID
             tenant_id: 租户 ID
         """
         self.celery_task = celery_task
-        self.session = session
         self.task_id = task_id
         self.tenant_id = tenant_id
-        self._task_model: Task | None = None
+        self._task_model: dict[str, Any] | None = None
+        self._store = TaskStore()
 
-    async def get_task(self) -> Task | None:
-        """获取任务模型
-
-        Returns:
-            Task 模型实例
-        """
+    async def get_task(self) -> dict[str, Any] | None:
+        """获取任务记录."""
         if self._task_model is None:
-            stmt = select(Task).where(
-                Task.task_id == self.task_id,
-                Task.tenant_id == self.tenant_id,
-            )
-            result = await self.session.execute(stmt)
-            self._task_model = result.scalar_one_or_none()
+            self._task_model = await self._store.get_task(self.task_id, self.tenant_id)
         return self._task_model
 
     async def create_task(
@@ -67,7 +52,7 @@ class TaskHandler:
         business_id: str | None = None,
         business_type: str | None = None,
         total_items: int | None = None,
-    ) -> Task:
+    ) -> dict[str, Any]:
         """创建任务记录
 
         Args:
@@ -80,9 +65,9 @@ class TaskHandler:
             total_items: 总项目数
 
         Returns:
-            创建的 Task 模型
+            创建的任务记录
         """
-        task = Task(
+        task = await self._store.create_task(
             task_id=self.task_id,
             task_type=task_type,
             tenant_id=self.tenant_id,
@@ -92,13 +77,8 @@ class TaskHandler:
             business_id=business_id,
             business_type=business_type,
             total_items=total_items,
-            # 关联 Celery 任务 ID
             celery_task_id=self.celery_task.request.id,
         )
-
-        self.session.add(task)
-        await self.session.flush()
-
         self._task_model = task
 
         logger.info(
@@ -114,6 +94,7 @@ class TaskHandler:
         self,
         progress: int,
         current_step: str | None = None,
+        total_items: int | None = None,
         processed_items: int | None = None,
         failed_items: int | None = None,
     ) -> None:
@@ -122,19 +103,20 @@ class TaskHandler:
         Args:
             progress: 进度百分比 (0-100)
             current_step: 当前步骤
+            total_items: 总项目数
             processed_items: 已处理项目数
             failed_items: 失败项目数
         """
-        task = await self.get_task()
-        if task:
-            task.progress = progress
-            if current_step:
-                task.current_step = current_step
-            if processed_items is not None:
-                task.processed_items = processed_items
-            if failed_items is not None:
-                task.failed_items = failed_items
-            task.updated_at = datetime.now(UTC)
+        fields: dict[str, Any] = {"progress": progress}
+        if current_step:
+            fields["current_step"] = current_step
+        if total_items is not None:
+            fields["total_items"] = total_items
+        if processed_items is not None:
+            fields["processed_items"] = processed_items
+        if failed_items is not None:
+            fields["failed_items"] = failed_items
+        await self._store.update_task(self.task_id, self.tenant_id, **fields)
 
     async def update_status(
         self,
@@ -151,23 +133,20 @@ class TaskHandler:
             error_stack: 错误堆栈
             result: 任务结果
         """
-        task = await self.get_task()
-        if task:
-            task.status = status
-            if error_message:
-                task.error_message = error_message
-            if error_stack:
-                task.error_stack = error_stack
-            if result:
-                task.result = result
-            task.updated_at = datetime.now(UTC)
+        fields: dict[str, Any] = {"status": status}
+        if error_message:
+            fields["error_message"] = error_message
+        if error_stack:
+            fields["error_stack"] = error_stack
+        if result:
+            fields["result"] = result
 
-            # 设置开始/完成时间
-            if status == "processing" and not task.started_at:
-                task.started_at = datetime.now(UTC)
-            elif status in ("completed", "failed", "cancelled"):
-                if not task.completed_at:
-                    task.completed_at = datetime.now(UTC)
+        now = datetime.now(UTC)
+        if status == "processing":
+            fields["started_at"] = now
+        elif status in ("completed", "failed", "cancelled"):
+            fields["completed_at"] = now
+        await self._store.update_task(self.task_id, self.tenant_id, **fields)
 
     async def add_log(
         self,
@@ -186,20 +165,15 @@ class TaskHandler:
             item_id: 关联的项目 ID
             extra_data: 额外数据
         """
-        import uuid
-
-        log = TaskLog(
-            task_id=self.task_id,
-            log_id=str(uuid.uuid4()),
-            tenant_id=self.tenant_id,
+        await self._store.add_log(
+            self.task_id,
+            self.tenant_id,
             level=level,
             message=message,
             step=step,
             item_id=item_id,
             extra_data=extra_data,
         )
-
-        self.session.add(log)
 
     async def mark_started(self) -> None:
         """标记任务开始"""
@@ -234,11 +208,16 @@ class TaskHandler:
             新的重试次数
         """
         task = await self.get_task()
-        if task:
-            task.retry_count += 1
-            task.updated_at = datetime.now(UTC)
-            return task.retry_count
-        return 0
+        if not task:
+            return 0
+        retry_count = int(task.get("retry_count", 0)) + 1
+        await self._store.update_task(
+            self.task_id,
+            self.tenant_id,
+            retry_count=retry_count,
+            updated_at=datetime.now(UTC),
+        )
+        return retry_count
 
 
 # ============== 任务上下文管理器 ==============
@@ -250,7 +229,7 @@ class task_context:
     自动管理任务状态和错误处理。
 
     Examples:
-        async with task_context(celery_task, session, task_id, tenant_id) as handler:
+        async with task_context(celery_task, task_id, tenant_id) as handler:
             await handler.mark_started()
 
             for i in range(10):
@@ -263,12 +242,10 @@ class task_context:
     def __init__(
         self,
         celery_task,
-        session: AsyncSession,
         task_id: str,
         tenant_id: int,
     ):
         self.celery_task = celery_task
-        self.session = session
         self.task_id = task_id
         self.tenant_id = tenant_id
         self._handler: TaskHandler | None = None
@@ -276,7 +253,6 @@ class task_context:
     async def __aenter__(self) -> TaskHandler:
         self._handler = TaskHandler(
             self.celery_task,
-            self.session,
             self.task_id,
             self.tenant_id,
         )

@@ -1,11 +1,13 @@
 """Web 搜索工具
 
-支持 DuckDuckGo 和 Tavily 搜索引擎。
-异步实现，带超时控制。
+使用 LangChain 的 DuckDuckGoSearchAPIWrapper 实现。
+支持异步执行，带超时控制。
 """
 
 import asyncio
+import re
 from functools import wraps
+from typing import Any
 
 from langchain_core.tools import tool
 
@@ -15,15 +17,99 @@ logger = get_logger(__name__)
 
 # 检查依赖
 try:
-    from duckduckgo_search import DDGS
+    from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 
     _duckduckgo_available = True
 except ImportError:
     _duckduckgo_available = False
-    logger.warning("duckduckgo_search_not_installed")
+    logger.warning("langchain_community_not_installed")
 
 # 默认超时时间（秒）
 _DEFAULT_TIMEOUT = 10.0
+
+
+class LangChainSearchWrapper:
+    """LangChain 搜索包装器
+
+    使用 LangChain 的 DuckDuckGoSearchAPIWrapper 实现。
+    """
+
+
+    def __init__(self) -> None:
+        """初始化搜索包装器"""
+        if _duckduckgo_available:
+            self._wrapper = DuckDuckGoSearchAPIWrapper()
+        else:
+            self._wrapper = None
+
+    def search(self, query: str, max_results: int = 5) -> list[dict[str, str]]:
+        """执行搜索
+
+        Args:
+            query: 搜索查询
+            max_results: 最大结果数
+
+        Returns:
+            搜索结果列表
+        """
+        if self._wrapper is None:
+            return []
+
+        # 使用 LangChain 的工具方法
+        raw_results = self._wrapper.results(query, max_results=max_results)
+
+        results = []
+        for result in raw_results:
+            results.append(
+                {
+                    "title": result.get("title", ""),
+                    "href": result.get("link", ""),
+                    "body": result.get("snippet", ""),
+                }
+            )
+
+        return results
+
+    def format_results(self, results: list[dict[str, str]], max_length: int = 200) -> str:
+        """格式化搜索结果
+
+        Args:
+            results: 搜索结果列表
+            max_length: 摘要最大长度
+
+        Returns:
+            格式化后的结果字符串
+        """
+        if not results:
+            return "未找到相关结果"
+
+        output_parts = []
+        for i, result in enumerate(results, 1):
+            title = result.get("title", "")
+            href = result.get("href", "")
+            body = result.get("body", "")
+
+            output_parts.append(f"[{i}] {title}")
+            if href:
+                output_parts.append(f"   链接: {href}")
+            if body:
+                body_preview = body[:max_length] + "..." if len(body) > max_length else body
+                output_parts.append(f"   摘要: {body_preview}")
+            output_parts.append("")
+
+        return "\n".join(output_parts)
+
+
+# 全局搜索包装器实例
+_search_wrapper: LangChainSearchWrapper | None = None
+
+
+def _get_search_wrapper() -> LangChainSearchWrapper:
+    """获取搜索包装器实例"""
+    global _search_wrapper
+    if _search_wrapper is None:
+        _search_wrapper = LangChainSearchWrapper()
+    return _search_wrapper
 
 
 def _run_in_executor(timeout: float | None = None):
@@ -61,36 +147,26 @@ def _sync_search(query: str, max_results: int) -> list[dict[str, str]]:
     Returns:
         搜索结果列表
     """
-    results = []
-    with DDGS() as ddgs:
-        ddgs_gen = ddgs.text(query, max_results=max_results)
-        for result in ddgs_gen:
-            results.append(
-                {
-                    "title": result.get("title", ""),
-                    "href": result.get("href", ""),
-                    "body": result.get("body", ""),
-                }
-            )
-    return results
+    wrapper = _get_search_wrapper()
+    return wrapper.search(query, max_results)
 
 
 @tool
 async def search_web(query: str, max_results: int = 5) -> str:
-    """使用 DuckDuckGo 搜索网络（异步版本）
+    """使用 DuckDuckGo 搜索网络
 
     在线程池中执行搜索，避免阻塞事件循环。
-    带有 10 秒超时保护。
+    带有超时保护。
 
     Args:
         query: 搜索查询关键词
         max_results: 最大结果数（1-10）
 
     Returns:
-        搜索结果摘要，包含标题、链接和摘要
+        搜索结果摘要，包含编号、标题、链接和摘要
     """
     if not _duckduckgo_available:
-        return "搜索功能不可用，请安装 duckduckgo-search"
+        return "搜索功能不可用，请安装 langchain-community: uv add langchain-community"
 
     # 限制 max_results 范围
     max_results = max(1, min(10, max_results))
@@ -104,20 +180,10 @@ async def search_web(query: str, max_results: int = 5) -> str:
             logger.info("web_search_no_results", query=query)
             return "未找到相关结果"
 
-        # 格式化结果
-        output_parts = []
-        for result in results:
-            title = result["title"]
-            href = result["href"]
-            body = result["body"]
+        # 使用包装器格式化结果
+        wrapper = _get_search_wrapper()
+        result_text = wrapper.format_results(results)
 
-            output_parts.append(f"标题: {title}")
-            output_parts.append(f"链接: {href}")
-            if body:
-                output_parts.append(f"摘要: {body[:200]}...")
-            output_parts.append("")  # 空行分隔
-
-        result_text = "\n".join(output_parts)
         logger.info("web_search_completed", query=query, result_count=len(results))
         return result_text
 
@@ -128,3 +194,7 @@ async def search_web(query: str, max_results: int = 5) -> str:
     except Exception as e:
         logger.error("web_search_failed", query=query, error=str(e))
         return f"搜索失败: {str(e)}"
+
+
+# 导出为工具
+__all__ = ["search_web"]

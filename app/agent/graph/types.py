@@ -40,16 +40,16 @@ class ChatState(MessagesState):
     """
 
     # 用户和会话信息
-    user_id: str | None
-    session_id: str
-    tenant_id: int | None
+    user_id: str | None = None
+    session_id: str = ""
+    tenant_id: int | None = None
 
     # 迭代控制
-    iteration_count: int
-    max_iterations: int
+    iteration_count: int = 0
+    max_iterations: int = 10
 
     # 错误处理
-    error: str | None
+    error: str | None = None
 
 
 class AgentState(TypedDict):

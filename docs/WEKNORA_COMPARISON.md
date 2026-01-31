@@ -133,6 +133,9 @@
 | **消息分页加载** | 低 | 低 | ✅ 已对齐 |
 | **FAQ 导出** | 低 | 低 | ✅ 已对齐 |
 | **继续接收流** | 中 | 低 | ✅ 已对齐 |
+| **知识库初始化配置** | 中 | 中 | ✅ 已对齐 |
+| **模型测试** | 低 | 低 | ✅ 已对齐 |
+| **Ollama 管理** | 低 | 低 | ✅ 已对齐 |
 
 ## 五、技术架构差异
 
@@ -797,6 +800,14 @@ result = qa_chain.invoke({"question": "查询", "chat_history": []})
 | 租户搜索 | 分页搜索租户 | `GET /tenants/search` |
 | 系统信息 | 版本/引擎/存储状态 | `GET /system/info` |
 
+### 12.3 认证增强（100% 对齐）
+
+| 功能 | API | 说明 |
+|------|-----|------|
+| Token 刷新 | `POST /auth/refresh` | 使用刷新令牌获取新的访问令牌 |
+| Token 验证 | `POST /auth/validate` | 验证 Token 是否有效 |
+| 密码修改 | `POST /auth/change-password` | 修改当前用户密码 |
+
 ---
 
 *文档维护: 本文档应随着对齐进度持续更新*
@@ -887,3 +898,65 @@ GET /sessions/{session_id}/continue-stream
 - SSE 流式返回
 - 支持 `since` 参数从指定位置开始
 - 超时控制避免永久挂起
+
+## 二十四、知识库初始化配置详情
+
+### 24.1 API 端点
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| GET | `/knowledge-bases/{kb_id}/initialization/config` | 获取配置 |
+| PUT | `/knowledge-bases/{kb_id}/initialization/config` | 更新配置 |
+| POST | `/knowledge-bases/{kb_id}/initialization/validate` | 验证配置 |
+| POST | `/knowledge-bases/{kb_id}/initialization/initialize` | 执行初始化 |
+
+### 24.2 配置项
+
+| 配置项 | 说明 |
+|--------|------|
+| VectorStore | 向量存储配置 |
+| Embedding | 嵌入模型配置 |
+| Rerank | 重排序模型配置 |
+| Multimodal | 多模态配置 |
+| Storage | 存储配置（MinIO） |
+| Extract | 知识图谱提取配置 |
+
+## 二十五、模型测试功能详情
+
+### 25.1 API 端点
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| POST | `/models/embedding/test` | 测试 Embedding 模型 |
+| POST | `/models/rerank/check` | 测试 Rerank 模型 |
+| POST | `/models/remote/check` | 检查远程模型 |
+| POST | `/models/llm/test` | 测试 LLM 模型 |
+| POST | `/models/multimodal/test` | 测试多模态模型 |
+
+### 25.2 测试内容
+
+| 模型类型 | 测试项 |
+|----------|--------|
+| Embedding | 连接、向量生成、延迟 |
+| Rerank | 连接、重排序效果 |
+| LLM | 连接、响应生成、延迟 |
+| Multimodal | 图像理解、OCR |
+
+## 二十六、Ollama 管理功能详情
+
+### 26.1 API 端点
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| GET | `/ollama/models` | 列出已安装模型 |
+| POST | `/ollama/models/download` | 下载模型 |
+| GET | `/ollama/progress/{task_id}` | 下载进度 |
+| DELETE | `/ollama/models/{name}` | 删除模型 |
+
+### 26.2 支持的模型
+
+| 模型类型 | 说明 |
+|----------|------|
+| Embedding | text-embedding 模型 |
+| LLM | 语言模型 |
+| Multimodal | 多模态模型 |

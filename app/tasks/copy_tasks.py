@@ -8,7 +8,7 @@ from typing import Any
 
 from app.infra.database import _get_session_factory
 from app.observability.logging import get_logger
-from app.services.knowledge_clone import execute_copy_task
+from app.services.knowledge.knowledge_clone import execute_copy_task
 
 logger = get_logger(__name__)
 

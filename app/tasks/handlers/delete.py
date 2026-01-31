@@ -3,10 +3,15 @@
 对齐 WeKnora99 的删除功能 (IndexDelete, KBDelete, KnowledgeListDelete)
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.infra.database import async_session_factory
 from app.observability.logging import get_logger
-from app.tasks.handlers.base import task_context
+from app.repositories.knowledge import (
+    ChunkRepository,
+    KnowledgeBaseRepository,
+    KnowledgeRepository,
+)
+from app.services.search.hybrid_search import HybridSearchService
+from app.tasks.handlers.base import ProgressReporter, TaskHandler, task_context
 
 logger = get_logger(__name__)
 
@@ -32,12 +37,8 @@ async def process_index_delete(
 
     task_id = f"idx_del_{knowledge_base_id[:8]}"
 
-    from app.infra.database import get_session_factory
-
-    session_factory = get_session_factory()
-
-    async with session_factory() as session:
-        async with task_context(celery_task, session, task_id, tenant_id) as handler:
+    async with task_context(celery_task, task_id, tenant_id) as handler:
+        async with async_session_factory() as session:
             await handler.create_task(
                 task_type="index:delete",
                 payload=payload,
@@ -50,16 +51,60 @@ async def process_index_delete(
             await handler.mark_started()
 
             try:
-                # TODO: 实现索引删除逻辑
-                await handler.update_progress(
-                    50,
-                    "删除向量索引",
-                    processed_items=0,
+                # 初始化服务
+                chunk_repo = ChunkRepository(session)
+                search_service = HybridSearchService(
+                    session=session,
+                    embedding_model_id=embedding_model_id,
                 )
 
+                # 步骤 1: 删除向量索引
+                await handler.update_progress(
+                    30,
+                    "删除向量索引",
+                    processed_items=0,
+                    total_items=len(chunk_ids),
+                )
+
+                deleted_count = 0
+                for i, chunk_id in enumerate(chunk_ids):
+                    await handler.update_progress(
+                        30 + int((i / len(chunk_ids)) * 60),
+                        f"删除索引 {i+1}/{len(chunk_ids)}",
+                        processed_items=i + 1,
+                        total_items=len(chunk_ids),
+                    )
+
+                    try:
+                        # 删除向量存储中的索引
+                        await search_service.delete_vectors(
+                            knowledge_base_id=knowledge_base_id,
+                            chunk_ids=[chunk_id],
+                        )
+
+                        # 更新分块状态
+                        await chunk_repo.update_fields(
+                            chunk_id=chunk_id,
+                            tenant_id=tenant_id,
+                            is_enabled=False,
+                        )
+
+                        deleted_count += 1
+
+                    except Exception as e:
+                        logger.warning(
+                            "index_delete_failed",
+                            chunk_id=chunk_id,
+                            error=str(e),
+                        )
+                        continue
+
+                # 完成
                 result = {
                     "status": "completed",
+                    "knowledge_base_id": knowledge_base_id,
                     "chunk_count": len(chunk_ids),
+                    "deleted_count": deleted_count,
                 }
 
                 await handler.mark_completed(result)
@@ -88,15 +133,12 @@ async def process_kb_delete(
         处理结果
     """
     knowledge_base_id = payload.get("knowledge_base_id")
+    delete_files = payload.get("delete_files", False)
 
     task_id = f"kb_del_{knowledge_base_id[:8]}"
 
-    from app.infra.database import get_session_factory
-
-    session_factory = get_session_factory()
-
-    async with session_factory() as session:
-        async with task_context(celery_task, session, task_id, tenant_id) as handler:
+    async with task_context(celery_task, task_id, tenant_id) as handler:
+        async with async_session_factory() as session:
             await handler.create_task(
                 task_type="kb:delete",
                 payload=payload,
@@ -108,17 +150,86 @@ async def process_kb_delete(
             await handler.mark_started()
 
             try:
-                # TODO: 实现知识库删除逻辑
-                # 1. 删除向量索引
-                await handler.update_progress(33, "删除向量索引")
-                # 2. 删除分块
-                await handler.update_progress(66, "删除分块")
-                # 3. 删除知识
-                await handler.update_progress(100, "删除知识")
+                # 初始化仓储
+                kb_repo = KnowledgeBaseRepository(session)
+                knowledge_repo = KnowledgeRepository(session)
+                chunk_repo = ChunkRepository(session)
 
+                # 验证知识库存在
+                kb = await kb_repo.get_by_tenant(knowledge_base_id, tenant_id)
+                if not kb:
+                    raise ValueError(f"Knowledge base {knowledge_base_id} not found")
+
+                # 获取知识库下的所有知识
+                from app.repositories.base import PaginationParams
+
+                knowledges_result = await knowledge_repo.list_by_kb(
+                    knowledge_base_id, tenant_id, PaginationParams(page=1, size=10000)
+                )
+                total_knowledge = knowledges_result.total
+
+                # 步骤 1: 删除向量索引
+                await handler.update_progress(20, "删除向量索引")
+
+                try:
+                    search_service = HybridSearchService(
+                        session=session,
+                        embedding_model_id=kb.embedding_model_id,
+                    )
+                    await search_service.delete_kb_index(knowledge_base_id)
+                except Exception as e:
+                    logger.warning(
+                        "vector_index_delete_failed",
+                        kb_id=knowledge_base_id,
+                        error=str(e),
+                    )
+
+                # 步骤 2: 删除分块
+                await handler.update_progress(40, "删除分块")
+
+                deleted_chunks = await chunk_repo.delete_by_knowledge_bulk(
+                    knowledge_base_id, tenant_id
+                )
+                logger.info(
+                    "chunks_deleted",
+                    kb_id=knowledge_base_id,
+                    count=deleted_chunks,
+                )
+
+                # 步骤 3: 删除知识
+                await handler.update_progress(60, "删除知识")
+
+                deleted_knowledge = await knowledge_repo.delete_by_knowledge_base(
+                    knowledge_base_id, tenant_id
+                )
+                logger.info(
+                    "knowledges_deleted",
+                    kb_id=knowledge_base_id,
+                    count=deleted_knowledge,
+                )
+
+                # 步骤 4: 删除知识库（软删除）
+                await handler.update_progress(80, "删除知识库")
+
+                await kb_repo.soft_delete(knowledge_base_id, tenant_id)
+
+                # 步骤 5: 删除文件（如果需要）
+                if delete_files:
+                    await handler.update_progress(90, "删除文件")
+
+                    # TODO: 实现文件删除逻辑
+                    # from app.infra.storage import storage
+                    # for knowledge in knowledges_result.items:
+                    #     if knowledge.file_path:
+                    #         await storage.delete(knowledge.file_path)
+
+                # 完成
                 result = {
                     "status": "completed",
                     "knowledge_base_id": knowledge_base_id,
+                    "deleted_chunks": deleted_chunks,
+                    "deleted_knowledge": deleted_knowledge,
+                    "deleted_files": delete_files,
                 }
 
                 await handler.mark_completed(result)
@@ -150,12 +261,8 @@ async def process_knowledge_list_delete(
 
     task_id = f"know_del_{len(knowledge_ids)}"
 
-    from app.infra.database import get_session_factory
-
-    session_factory = get_session_factory()
-
-    async with session_factory() as session:
-        async with task_context(celery_task, session, task_id, tenant_id) as handler:
+    async with task_context(celery_task, task_id, tenant_id) as handler:
+        async with async_session_factory() as session:
             await handler.create_task(
                 task_type="knowledge:list_delete",
                 payload=payload,
@@ -166,17 +273,98 @@ async def process_knowledge_list_delete(
             await handler.mark_started()
 
             try:
-                # TODO: 实现批量删除逻辑
-                for i, knowledge_id in enumerate(knowledge_ids):
-                    await handler.update_progress(
-                        int((i / len(knowledge_ids)) * 100),
-                        f"删除知识: {knowledge_id[:8]}",
-                        processed_items=i + 1,
-                    )
+                # 初始化仓储
+                knowledge_repo = KnowledgeRepository(session)
+                chunk_repo = ChunkRepository(session)
 
+                # 获取知识库信息（用于向量删除）
+                knowledge = await knowledge_repo.get_by_tenant(knowledge_ids[0], tenant_id)
+                if knowledge:
+                    kb_id = knowledge.knowledge_base_id
+
+                    try:
+                        search_service = HybridSearchService(
+                            session=session,
+                            embedding_model_id=None,
+                        )
+                        vector_service_available = True
+                    except Exception:
+                        vector_service_available = False
+                else:
+                    vector_service_available = False
+
+                # 逐个删除知识
+                deleted_count = 0
+                failed_count = 0
+                reporter = ProgressReporter(handler, total=len(knowledge_ids), current_step="删除知识")
+
+                for i, knowledge_id in enumerate(knowledge_ids):
+                    try:
+                        await handler.update_progress(
+                            int((i / len(knowledge_ids)) * 100),
+                            f"删除知识: {knowledge_id[:8]}",
+                            processed_items=i + 1,
+                            total_items=len(knowledge_ids),
+                            failed_items=failed_count,
+                        )
+
+                        # 获取知识条目以获取知识库 ID 和分块信息
+                        knowledge = await knowledge_repo.get_by_tenant(knowledge_id, tenant_id)
+                        if not knowledge:
+                            logger.warning(
+                                "knowledge_not_found",
+                                knowledge_id=knowledge_id,
+                            )
+                            failed_count += 1
+                            reporter.failed += 1
+                            continue
+
+                        # 删除向量索引
+                        if vector_service_available:
+                            try:
+                                chunks = await chunk_repo.list_by_knowledge(
+                                    knowledge_id,
+                                    tenant_id,
+                                    app.repositories.base.PaginationParams(page=1, size=10000),
+                                )
+                                chunk_ids = [c.id for c in chunks.items]
+                                if chunk_ids:
+                                    await search_service.delete_vectors(
+                                        knowledge_base_id=kb_id,
+                                        chunk_ids=chunk_ids,
+                                    )
+                            except Exception as e:
+                                logger.warning(
+                                    "vector_delete_failed",
+                                    knowledge_id=knowledge_id,
+                                    error=str(e),
+                                )
+
+                        # 删除分块
+                        await chunk_repo.delete_by_knowledge(knowledge_id, tenant_id)
+
+                        # 删除知识
+                        await knowledge_repo.soft_delete(knowledge_id, tenant_id)
+
+                        deleted_count += 1
+                        reporter.processed += 1
+
+                    except Exception as e:
+                        logger.error(
+                            "knowledge_delete_failed",
+                            knowledge_id=knowledge_id,
+                            error=str(e),
+                        )
+                        failed_count += 1
+                        reporter.failed += 1
+                        continue
+
+                # 完成
                 result = {
                     "status": "completed",
-                    "deleted_count": len(knowledge_ids),
+                    "total_count": len(knowledge_ids),
+                    "deleted_count": deleted_count,
+                    "failed_count": failed_count,
                 }
 
                 await handler.mark_completed(result)

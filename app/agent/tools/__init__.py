@@ -27,16 +27,28 @@ from app.agent.tools.builtin import (
     close_crawler,
     crawl_multiple_urls,
     crawl_url,
+    data_analysis,
+    data_schema,
+    data_summary,
+    database_describe,
+    database_query,
+    database_tables,
     get_available_sources,
+    get_document_info,
     get_weather,
+    grep_chunks,
     is_arxiv_available,
     is_wikipedia_available,
+    list_knowledge_chunks,
+    query_knowledge_graph,
     search_academic,
     search_arxiv,
     search_database,
+    search_entity,
     search_web,
     search_web_tavily,
     search_wikipedia,
+    web_fetch,
 )
 from app.agent.tools.decorators import (
     LoggedToolMixin,
@@ -137,6 +149,22 @@ __all__ = [
     "crawl_url",
     "crawl_multiple_urls",
     "close_crawler",
+    # 网页内容提取
+    "web_fetch",
+    # 知识库搜索
+    "grep_chunks",
+    "query_knowledge_graph",
+    "search_entity",
+    "list_knowledge_chunks",
+    "get_document_info",
+    # 数据分析工具
+    "data_analysis",
+    "data_schema",
+    "data_summary",
+    # 数据库工具
+    "database_query",
+    "database_tables",
+    "database_describe",
     # 其他内置工具
     "search_database",
     "get_weather",
@@ -162,6 +190,20 @@ _builtin_tools = [
     search_database,
     get_weather,
     calculate,
+    # 新增工具
+    grep_chunks,
+    query_knowledge_graph,
+    web_fetch,
+    data_analysis,
+    data_schema,
+    data_summary,
+    database_query,
+    database_tables,
+    database_describe,
+    # 知识库管理工具
+    search_entity,
+    list_knowledge_chunks,
+    get_document_info,
 ]
 for tool_obj in _builtin_tools:
     register_tool(tool_obj)

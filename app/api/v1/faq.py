@@ -30,8 +30,7 @@ from app.schemas.faq import (
     FAQSearchResponse,
     FAQStatsResponse,
 )
-from app.services.faq_export import ExportFormat, FAQExporter, get_faq_exporter
-from app.services.faq_service import FAQService, get_faq_service
+from app.services.shared.faq import ExportFormat, FAQExporter, FAQService, get_faq_exporter, get_faq_service
 
 router = APIRouter(prefix="/faq", tags=["FAQ"])
 logger = get_logger(__name__)

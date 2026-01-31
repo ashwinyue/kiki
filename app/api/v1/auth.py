@@ -10,20 +10,25 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.auth.jwt import get_token_sub
-from app.rate_limit.limiter import RateLimit, limiter
+from app.infra.database import session_scope
 from app.models.database import User
 from app.observability.logging import get_logger
+from app.rate_limit.limiter import RateLimit, limiter
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     RegisterRequest,
     SessionListItem,
     SessionResponse,
+    TokenRefreshRequest,
+    TokenRefreshResponse,
     TokenResponse,
+    TokenValidateRequest,
+    TokenValidateResponse,
     UserResponse,
     UserWithTokenResponse,
 )
-from app.services.auth import get_auth_service
-from app.infra.database import session_scope
+from app.services.core.auth import get_auth_service
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -182,7 +187,8 @@ async def login(
 
         return TokenResponse(
             access_token=access_token,
-            token_type="bearer",
+            # ruff: disable=S106 - "bearer" 是 OAuth 2.0 标准 token type，非密码
+            token_type="bearer",  # noqa: S106 - OAuth 2.0 标准 token type
             expires_at=expires_at.isoformat() if expires_at else None,
         )
 
@@ -216,7 +222,7 @@ async def login_json(
 
         return TokenResponse(
             access_token=access_token,
-            token_type="bearer",
+            token_type="bearer",  # noqa: S106 - OAuth 2.0 标准 token type
             expires_at=expires_at.isoformat() if expires_at else None,
         )
 
@@ -353,3 +359,96 @@ async def update_session_name(
     async with session_scope() as session:
         auth_service = get_auth_service(session)
         return await auth_service.update_session_name(session_id, current_user.id, name)
+
+
+# ============== Token 管理 ==============
+
+
+@router.post(
+    "/refresh",
+    response_model=TokenRefreshResponse,
+    summary="刷新访问令牌",
+    description="使用刷新令牌获取新的访问令牌。",
+    responses={
+        status.HTTP_200_OK: {"description": "令牌刷新成功"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "刷新令牌无效"},
+    },
+)
+@limiter.limit(RateLimit.API)
+async def refresh_token(
+    request: Request,
+    data: TokenRefreshRequest,
+) -> TokenRefreshResponse:
+    """刷新访问令牌
+
+    使用刷新令牌获取新的访问令牌，实现无感续期。
+    """
+    async with session_scope() as session:
+        auth_service = get_auth_service(session)
+        access_token, expires_at = await auth_service.refresh_token(data.refresh_token)
+
+        return TokenRefreshResponse(
+            access_token=access_token,
+            token_type="bearer",  # noqa: S106 - OAuth 2.0 标准 token type
+            expires_at=expires_at.isoformat() if expires_at else None,
+        )
+
+
+@router.post(
+    "/validate",
+    response_model=TokenValidateResponse,
+    summary="验证 Token",
+    description="验证 Token 是否有效并返回相关信息。",
+    responses={
+        status.HTTP_200_OK: {"description": "验证完成"},
+    },
+)
+@limiter.limit(RateLimit.API)
+async def validate_token(
+    request: Request,
+    data: TokenValidateRequest,
+) -> TokenValidateResponse:
+    """验证 Token
+
+    检查 Token 是否有效，返回验证结果和用户信息。
+    """
+    async with session_scope() as session:
+        auth_service = get_auth_service(session)
+        result = await auth_service.validate_token(data.token)
+
+        return TokenValidateResponse(
+            valid=result["valid"],
+            user_id=result["user_id"],
+            expires_at=result["expires_at"],
+            message=result["message"],
+        )
+
+
+@router.post(
+    "/change-password",
+    response_model=dict[str, str],
+    summary="修改密码",
+    description="修改当前用户的密码，需要提供旧密码进行验证。",
+    responses={
+        status.HTTP_200_OK: {"description": "密码修改成功"},
+        status.HTTP_400_BAD_REQUEST: {"description": "旧密码错误或新密码不符合要求"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "未认证"},
+    },
+)
+@limiter.limit(RateLimit.API)
+async def change_password(
+    request: Request,
+    data: ChangePasswordRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, str]:
+    """修改密码
+
+    修改当前登录用户的密码，需要验证旧密码。
+    """
+    async with session_scope() as session:
+        auth_service = get_auth_service(session)
+        await auth_service.change_password(current_user.id, data)
+
+        logger.info("password_changed", user_id=current_user.id)
+
+        return {"status": "success", "message": "Password changed successfully"}

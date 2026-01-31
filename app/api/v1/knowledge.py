@@ -35,12 +35,12 @@ from app.schemas.knowledge_initialization import (
     ValidationResult,
 )
 from app.schemas.response import ApiResponse, DataResponse
-from app.services.knowledge_initialization import (
+from app.services.knowledge.knowledge_initialization import (
     InitResult,
     KnowledgeInitializationService,
 )
-from app.services.knowledge_search import KnowledgeSearchService
-from app.services.knowledge_service import KnowledgeBaseService, KnowledgeService
+from app.services.knowledge.knowledge_search import KnowledgeSearchService
+from app.services.knowledge.base import KnowledgeBaseService
 
 router = APIRouter(prefix="/knowledge-bases", tags=["knowledge"])
 logger = get_logger(__name__)
@@ -230,7 +230,7 @@ async def create_knowledge_from_file(
     支持的文件类型：.pdf, .txt, .md, .markdown
     """
     from app.infra.storage import get_storage
-    from app.services.knowledge_service import is_supported_file_type
+    from app.services.knowledge.base import is_supported_file_type
 
     # 1. 验证文件类型
     if not file.filename:
@@ -447,7 +447,7 @@ async def copy_knowledge_base(
     将一个知识库的内容复制到另一个知识库。
     如果 target_id 为空，则创建新的知识库作为目标。
     """
-    from app.services.knowledge_clone import create_copy_task
+    from app.services.knowledge.knowledge_clone import create_copy_task
     from app.tasks import start_copy_task
 
     service = KnowledgeBaseService(db)
@@ -506,7 +506,7 @@ async def get_copy_progress(
 
     对齐 WeKnora99 GET /knowledge-bases/copy/progress/{task_id}
     """
-    from app.services.knowledge_clone import get_copy_progress
+    from app.services.knowledge.knowledge_clone import get_copy_progress
 
     progress = await get_copy_progress(db, task_id)
 

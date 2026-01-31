@@ -9,6 +9,7 @@ from typing import Literal
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import RunnableConfig
@@ -79,7 +80,7 @@ def build_chat_graph(
     return builder
 
 
-def compile_chat_graph(
+async def compile_chat_graph(
     llm_service: LLMService | None = None,
     system_prompt: str | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
@@ -121,6 +122,17 @@ def compile_chat_graph(
     if checkpointer is None:
         checkpointer = MemorySaver()
         logger.debug("using_memory_checkpointer")
+
+    # 对于 PostgreSQL checkpointer，确保初始化连接池
+    if isinstance(checkpointer, AsyncPostgresSaver):
+        try:
+            await checkpointer.setup()
+            logger.debug("postgres_checkpointer_initialized")
+        except Exception as e:
+            logger.warning("checkpointer_setup_failed", error=str(e))
+            # 降级到 MemorySaver
+            checkpointer = MemorySaver()
+            logger.info("checkpointer_downgraded_to_memory")
 
     # 编译图
     graph = builder.compile(checkpointer=checkpointer)

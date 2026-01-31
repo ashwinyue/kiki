@@ -10,19 +10,21 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request as StarletteRequest
 
-from app.rate_limit.limiter import RateLimit, limiter
+from app.infra.database import get_session
 from app.middleware import RequiredTenantIdDep
 from app.models.agent import MCPServiceCreate, MCPServiceUpdate
 from app.observability.logging import get_logger
-from app.infra.database import get_session
+from app.rate_limit.limiter import RateLimit, limiter
 from app.schemas.mcp_service import (
     MCPServiceListResponse,
     MCPServiceRequest,
     MCPServiceResponse,
 )
-from app.services.mcp_service_service import (
+from app.services.mcp_service import (
     McpServiceService,
-    get_mcp_service_service,
+)
+from app.services.mcp_service import (
+    get_mcp_service as get_mcp_service_service,
 )
 
 router = APIRouter(prefix="/mcp-services", tags=["MCP Services"])

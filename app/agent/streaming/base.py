@@ -4,7 +4,7 @@
 """
 
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, NamedTuple
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
@@ -13,6 +13,17 @@ from langgraph.types import RunnableConfig
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class MessageTuple(NamedTuple):
+    """消息元组（用于 messages-tuple 流模式）
+
+    Attributes:
+        content: token 内容
+        is_last: 是否是最后一个 token
+    """
+    content: str
+    is_last: bool
 
 
 class StreamEvent:
@@ -244,6 +255,47 @@ class StreamProcessor:
 
         logger.info("stream_values_complete")
 
+    async def stream_messages_tuple(
+        self,
+        input_data: dict[str, Any],
+        config: RunnableConfig,
+    ) -> AsyncIterator[MessageTuple]:
+        """流式输出消息元组 (token, is_last)
+
+        新版 LangGraph 的 messages-tuple 模式，提供更精细的控制。
+
+        Args:
+            input_data: 输入数据
+            config: 运行配置
+
+        Yields:
+            MessageTuple 元组 (token 内容, 是否最后一个)
+        """
+        logger.info("stream_messages_tuple_start")
+
+        try:
+            async for chunk in self._graph.astream(
+                input_data,
+                config,
+                stream_mode="messages-tuple",
+            ):
+                # messages-tuple 模式返回 (BaseMessage, bool) 元组
+                if isinstance(chunk, tuple):
+                    message, is_last = chunk
+                    if hasattr(message, "content") and message.content:
+                        content = message.content
+                        if isinstance(content, str):
+                            yield MessageTuple(content=content, is_last=bool(is_last))
+                        elif isinstance(content, list):
+                            for item in content:
+                                if isinstance(item, str):
+                                    yield MessageTuple(content=item, is_last=bool(is_last))
+        except Exception as e:
+            logger.error("stream_messages_tuple_error", error=str(e))
+            raise
+
+        logger.info("stream_messages_tuple_complete")
+
 
 async def stream_tokens_from_graph(
     graph: CompiledStateGraph,
@@ -306,9 +358,41 @@ async def stream_events_from_graph(
         yield event
 
 
+async def stream_messages_tuple_from_graph(
+    graph: CompiledStateGraph,
+    input_data: dict[str, Any],
+    config: RunnableConfig,
+) -> AsyncIterator[MessageTuple]:
+    """便捷函数：从图中流式获取消息元组 (token, is_last)
+
+    Args:
+        graph: 编译后的 LangGraph
+        input_data: 输入数据
+        config: 运行配置
+
+    Yields:
+        MessageTuple 元组
+
+    Examples:
+        ```python
+        from app.agent.streaming import stream_messages_tuple_from_graph
+
+        async for msg in stream_messages_tuple_from_graph(graph, input_data, config):
+            print(msg.content, end="", flush=True)
+            if msg.is_last:
+                print("\\n--- Message Complete ---")
+        ```
+    """
+    processor = StreamProcessor(graph)
+    async for msg in processor.stream_messages_tuple(input_data, config):
+        yield msg
+
+
 __all__ = [
     "StreamEvent",
     "StreamProcessor",
+    "MessageTuple",
     "stream_tokens_from_graph",
     "stream_events_from_graph",
+    "stream_messages_tuple_from_graph",
 ]

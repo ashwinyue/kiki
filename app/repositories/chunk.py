@@ -3,6 +3,7 @@
 对齐 WeKnora99 分块管理
 """
 
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import delete, func, select, update
@@ -121,6 +122,84 @@ class ChunkRepository(BaseRepository[Chunk]):
         result = await self.session.execute(stmt)
         await self.session.commit()
         return result.rowcount
+
+    async def delete_by_knowledge_base(
+        self, knowledge_base_id: str, tenant_id: int
+    ) -> int:
+        """删除知识库下的所有分块（硬删除）
+
+        Args:
+            knowledge_base_id: 知识库 ID
+            tenant_id: 租户 ID
+
+        Returns:
+            删除的记录数
+        """
+        stmt = delete(Chunk).where(
+            Chunk.knowledge_base_id == knowledge_base_id,
+            Chunk.tenant_id == tenant_id,
+        )
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount
+
+    async def create_chunks(
+        self,
+        chunks: list[dict],
+        kb_id: str,
+        knowledge_id: str,
+        tenant_id: int,
+    ) -> list[Chunk]:
+        """批量创建分块
+
+        Args:
+            chunks: 分块数据列表
+            kb_id: 知识库 ID
+            knowledge_id: 知识 ID
+            tenant_id: 租户 ID
+
+        Returns:
+            创建的分块列表
+        """
+        import uuid
+        from datetime import UTC
+
+        now = datetime.now(UTC)
+        new_chunks = []
+
+        for chunk_data in chunks:
+            chunk = Chunk(
+                id=str(uuid.uuid4()),
+                knowledge_id=knowledge_id,
+                knowledge_base_id=kb_id,
+                tenant_id=tenant_id,
+                content=chunk_data.get("content", ""),
+                chunk_index=chunk_data.get("chunk_index", 0),
+                chunk_type=chunk_data.get("chunk_type", "text"),
+                start_at=chunk_data.get("start_at", 0),
+                end_at=chunk_data.get("end_at", 0),
+                is_enabled=chunk_data.get("is_enabled", True),
+                embedding=chunk_data.get("embedding"),
+                meta_data=chunk_data.get("meta_data", {}),
+                created_at=now,
+                updated_at=now,
+            )
+            self.session.add(chunk)
+            new_chunks.append(chunk)
+
+        await self.session.commit()
+
+        # 刷新获取 ID
+        for chunk in new_chunks:
+            await self.session.refresh(chunk)
+
+        logger.info(
+            "chunks_created",
+            knowledge_id=knowledge_id,
+            count=len(new_chunks),
+        )
+
+        return new_chunks
 
     async def count_by_knowledge(self, knowledge_id: str, tenant_id: int) -> int:
         """统计知识的分块数量"""

@@ -16,7 +16,7 @@ from app.schemas.document import (
     SupportedFormatsResponse,
 )
 from app.schemas.response import ApiResponse
-from app.services.document_service import get_document_service
+from app.services.knowledge.document.service import get_document_service
 
 logger = get_logger(__name__)
 

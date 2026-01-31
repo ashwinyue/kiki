@@ -32,8 +32,8 @@ def _create_cache_key(system_prompt: str | None) -> str:
     """
     if system_prompt is None:
         return "__default__"
-    # 使用哈希值避免过长的键
-    return f"prompt_{hash(system_prompt)}"
+    # 使用哈希值避免过长的键，添加版本号避免冲突
+    return f"v1_{hash(system_prompt)}"
 
 
 class GraphCache:
@@ -131,6 +131,25 @@ class GraphCache:
             self._cache_keys.clear()
             logger.info("graph_cache_cleared")
 
+    def invalidate(self, system_prompt: str | None = None) -> bool:
+        """使指定缓存失效
+
+        Args:
+            system_prompt: 系统提示词（None 表示默认缓存）
+
+        Returns:
+            是否成功删除缓存项
+        """
+        cache_key = _create_cache_key(system_prompt)
+        with self._lock:
+            if cache_key in self._cache:
+                del self._cache[cache_key]
+                if cache_key in self._cache_keys:
+                    self._cache_keys.remove(cache_key)
+                logger.info("cache_invalidated", key=cache_key)
+                return True
+            return False
+
     def size(self) -> int:
         """获取当前缓存大小"""
         with self._lock:
@@ -205,10 +224,24 @@ def get_graph_cache_stats() -> dict[str, int]:
     return cache.stats()
 
 
+def invalidate_graph(system_prompt: str | None = None) -> bool:
+    """使指定图缓存失效（便捷函数）
+
+    Args:
+        system_prompt: 系统提示词（None 表示默认缓存）
+
+    Returns:
+        是否成功删除缓存项
+    """
+    cache = get_graph_cache()
+    return cache.invalidate(system_prompt)
+
+
 __all__ = [
     "GraphCache",
     "get_graph_cache",
     "get_cached_graph",
     "clear_graph_cache",
     "get_graph_cache_stats",
+    "invalidate_graph",
 ]

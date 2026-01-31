@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 async def chat_node(
     state: ChatState,
     config: RunnableConfig,
-) -> Command[Literal["tools", "__end__"]]:
+) -> Command:
     """聊天节点 - 生成 LLM 响应
 
     使用 Command 模式进行节点跳转和状态更新。
@@ -119,7 +119,7 @@ async def chat_node(
 async def tools_node(
     state: ChatState,
     config: RunnableConfig,
-) -> Command[Literal["chat"]]:
+) -> Command:
     """工具节点 - 执行工具调用
 
     使用 LangGraph 的 ToolNode 执行工具调用。
@@ -234,7 +234,7 @@ def create_chat_node_factory(
     async def chat_node_impl(
         state: ChatState,
         config: RunnableConfig,
-    ) -> Command[Literal["tools", "__end__"]]:
+    ) -> Command:
         """聊天节点实现"""
         logger.debug("chat_node_entered", message_count=len(state.get("messages", [])))
 

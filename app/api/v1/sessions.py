@@ -378,7 +378,7 @@ async def get_stream_info(
 
     返回会话的流式处理状态。
     """
-    from app.services.stream_continuation import get_stream_continuation_service
+    from app.agent.streaming.service import get_stream_continuation_service
 
     user_id = getattr(request.state, "user_id", None)
 
@@ -437,7 +437,7 @@ async def continue_stream(
 
     返回 SSE 流式响应。
     """
-    from app.services.stream_continuation import get_stream_continuation_service
+    from app.agent.streaming.service import get_stream_continuation_service
 
     user_id = getattr(request.state, "user_id", None)
 

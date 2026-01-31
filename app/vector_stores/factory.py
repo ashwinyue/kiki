@@ -11,6 +11,7 @@ from app.config.settings import get_settings
 from app.observability.logging import get_logger
 from app.vector_stores.base import BaseVectorStore, MemoryVectorStore, VectorStoreConfig
 from app.vector_stores.elasticsearch import ElasticsearchConfig, ElasticsearchVectorStore
+from app.vector_stores.pgvector import PgVectorConfig, PgVectorStore
 from app.vector_stores.pinecone import PineconeConfig, PineconeVectorStore
 from app.vector_stores.qdrant import QdrantConfig, QdrantVectorStore
 
@@ -18,7 +19,7 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 
-VectorStoreType = Literal["memory", "qdrant", "pinecone", "elasticsearch"]
+VectorStoreType = Literal["memory", "qdrant", "pgvector", "pinecone", "elasticsearch"]
 
 
 class VectorStoreFactory:
@@ -96,6 +97,23 @@ class VectorStoreFactory:
                 port=kwargs.get("port", 6333),
             )
             return QdrantVectorStore(qdrant_config, embeddings)
+
+        elif store_type == "pgvector":
+            # 构建 pgvector 配置
+            pgvector_config = PgVectorConfig(
+                collection_name=config.collection_name,
+                dimension=config.dimension,
+                metric=config.metric,
+                embedding_model=config.embedding_model,
+                tenant_id=config.tenant_id,
+                # pgvector 特定配置
+                connection_string=kwargs.get("connection_string"),
+                table_name=kwargs.get("table_name", "embeddings"),
+                hnsw_m=kwargs.get("hnsw_m", 16),
+                hnsw_ef_construction=kwargs.get("hnsw_ef_construction", 64),
+                hnsw_ef_search=kwargs.get("hnsw_ef_search", 40),
+            )
+            return PgVectorStore(pgvector_config, embeddings)
 
         elif store_type == "pinecone":
             # 构建 Pinecone 配置

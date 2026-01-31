@@ -19,10 +19,10 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import RunnableConfig
 
 from app.observability.logging import get_logger
-from app.services.stream_continuation import (
+from app.agent.streaming.service import (
     StreamEvent as StreamContinuationEvent,
 )
-from app.services.stream_continuation import (
+from app.agent.streaming.service import (
     get_stream_continuation_service,
 )
 

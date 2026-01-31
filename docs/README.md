@@ -91,36 +91,56 @@ make up
 ```
 kiki/
 ├── app/                      # 应用代码
-│   ├── api/                  # API 路由层
-│   │   └── v1/              # API v1 版本
-│   ├── agent/               # Agent 核心模块
-│   │   ├── graphs/          # LangGraph 工作流
-│   │   ├── tools/           # 工具注册表
-│   │   └── memory/          # 记忆管理
-│   ├── core/                # 核心模块
-│   │   ├── config.py        # 配置管理
-│   │   ├── auth.py          # 认证授权
-│   │   ├── middleware.py    # 中间件
-│   │   └── errors.py        # 错误处理
-│   ├── llm/                 # LLM 服务
-│   │   ├── service.py       # LLM 服务实现
-│   │   ├── providers.py     # 模型提供商
-│   │   └── registry.py      # 模型注册表
-│   ├── infra/               # 基础设施
-│   │   ├── redis.py         # Redis 客户端
-│   │   └── storage.py       # 对象存储
-│   ├── observability/       # 可观测性
-│   │   ├── logging.py       # 日志配置
-│   │   └── metrics.py       # 指标收集
-│   ├── models/              # 数据模型
-│   ├── schemas/             # Pydantic 模式
-│   ├── repositories/        # 数据访问层
-│   └── main.py              # 应用入口
-├── tests/                   # 测试目录
-├── docs/                    # 文档目录
-├── config/                  # 配置文件
-├── scripts/                 # 脚本目录
-└── pyproject.toml          # 项目配置
+│   ├── agent/                # LangGraph Agent 核心
+│   │   ├── agent.py          # Agent 主类
+│   │   ├── factory.py        # Agent 工厂
+│   │   ├── graph/            # 图构建 (builder, nodes, cache)
+│   │   ├── memory/           # 记忆系统
+│   │   ├── streaming/        # 流式处理
+│   │   └── tools/            # 工具注册表
+│   ├── api/v1/               # REST API 路由
+│   │   ├── chat.py           # 聊天接口
+│   │   ├── sessions.py       # 会话管理
+│   │   ├── knowledge.py      # 知识库接口
+│   │   └── auth.py           # 认证接口
+│   ├── models/               # SQLModel 数据模型
+│   ├── repositories/         # 数据访问层
+│   ├── services/             # 业务逻辑层
+│   │   ├── agent/            # Agent 服务
+│   │   ├── chat/             # 聊天服务
+│   │   ├── llm/              # LLM 服务
+│   │   └── knowledge/        # 知识服务
+│   ├── schemas/              # Pydantic 模式
+│   ├── llm/                  # LLM 模块
+│   │   ├── service.py        # LLM 服务
+│   │   ├── registry.py       # 模型注册表
+│   │   └── providers.py      # 模型提供商
+│   ├── vector_stores/        # 向量存储
+│   │   ├── base.py           # 存储基类
+│   │   ├── qdrant.py         # Qdrant 实现
+│   │   └── pgvector.py       # PGVector 实现
+│   ├── retrievers/           # 检索器
+│   ├── infra/                # 基础设施
+│   │   ├── redis.py          # Redis 客户端
+│   │   └── database.py       # 数据库连接
+│   ├── tasks/                # Celery 异步任务
+│   │   ├── celery_app.py     # Celery 配置
+│   │   └── handlers/         # 任务处理器
+│   ├── middleware/           # HTTP 中间件
+│   ├── observability/        # 可观测性
+│   │   ├── logging.py        # 结构化日志
+│   │   └── metrics.py        # 指标收集
+│   ├── auth/                 # 认证授权
+│   │   ├── jwt.py            # JWT 处理
+│   │   └── api_key.py        # API Key
+│   ├── config/               # 配置管理
+│   │   ├── settings.py       # Pydantic Settings
+│   │   └── dependencies.py   # 依赖注入
+│   └── main.py               # 应用入口
+├── tests/                    # 测试目录
+├── docs/                     # 文档目录
+├── pyproject.toml            # 项目配置
+└── uv.lock                   # 依赖锁文件
 ```
 
 ## 快速示例

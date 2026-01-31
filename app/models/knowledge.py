@@ -9,7 +9,6 @@ from typing import Any
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Column, Field, SQLModel
 
-
 # ============== Model (模型) ==============
 
 
@@ -215,28 +214,33 @@ class ChunkCreate(ChunkBase):
 
 
 class EmbeddingBase(SQLModel):
-    """向量基础模型"""
+    """向量基础模型
 
-    source_id: str = Field(max_length=64)
-    source_type: int  # 1: chunk, 2: knowledge
-    dimension: int
+    对齐 WeKnora99 embeddings 表结构
+    """
+
+    source_id: str = Field(max_length=64, description="源 ID (如 chunk_id)")
+    source_type: int = Field(default=1, description="源类型: 1=chunk, 2=knowledge")
+    dimension: int = Field(description="向量维度")
+    content: str | None = Field(default=None, description="文本内容")
+    tag_id: str | None = Field(default=None, max_length=36, description="标签 ID")
 
 
 class Embedding(EmbeddingBase, table=True):
-    """向量表模型"""
+    """向量表模型
+
+    注意: embedding 向量字段由 pgvector 管理，不在此处定义。
+    向量数据通过 PgVectorStore 直接操作 SQL 存储。
+    """
 
     __tablename__ = "embeddings"
 
     id: int | None = Field(default=None, primary_key=True)
-    chunk_id: str | None = Field(default=None, max_length=64)
-    knowledge_id: str | None = Field(default=None, max_length=64)
-    knowledge_base_id: str | None = Field(default=None, max_length=64)
-    content: str | None = None
-    # embedding 字段需要在实际使用时通过原始 SQL 处理
-    # 这里简化为字符串存储
-    embedding_value: str | None = Field(default=None, max_length=10000)
-    is_enabled: bool = Field(default=True)
-    tag_id: str | None = Field(default=None, max_length=36)
+    chunk_id: str | None = Field(default=None, max_length=64, description="分块 ID")
+    knowledge_id: str | None = Field(default=None, max_length=64, description="知识条目 ID")
+    knowledge_base_id: str | None = Field(default=None, max_length=64, description="知识库 ID")
+    is_enabled: bool = Field(default=True, description="是否启用")
+    tenant_id: int | None = Field(default=None, description="租户 ID", index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
