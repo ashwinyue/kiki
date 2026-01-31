@@ -1,12 +1,12 @@
 """Agent 相关模式
 
-提供单 Agent CRUD 和多 Agent 协作相关的请求/响应模型。
+提供单 Agent CRUD 相关的请求/响应模型。
 """
 
 from pydantic import BaseModel, Field
 
 
-# ============== 多 Agent 协作 Schemas ==============
+# ============== Agent 配置 Schemas ==============
 
 
 class AgentConfig(BaseModel):
@@ -15,81 +15,6 @@ class AgentConfig(BaseModel):
     name: str = Field(..., description="Agent 名称")
     system_prompt: str = Field("", description="系统提示词")
     tools: list[str] = Field(default_factory=list, description="使用的工具名称列表")
-
-
-class RouterAgentRequest(BaseModel):
-    """路由 Agent 创建请求"""
-
-    name: str = Field(..., description="Agent 系统名称")
-    agents: list[AgentConfig] = Field(..., description="子 Agent 配置列表", min_length=1)
-    router_prompt: str | None = Field(None, description="自定义路由提示词")
-
-
-class SupervisorAgentRequest(BaseModel):
-    """监督 Agent 创建请求"""
-
-    name: str = Field(..., description="Agent 系统名称")
-    workers: list[AgentConfig] = Field(..., description="Worker Agent 配置列表", min_length=1)
-    supervisor_prompt: str | None = Field(None, description="自定义监督提示词")
-
-
-class SwarmAgentRequest(BaseModel):
-    """Swarm Agent 创建请求"""
-
-    name: str = Field(..., description="Agent 系统名称")
-    agents: list[AgentConfig] = Field(
-        ...,
-        description="Agent 配置列表，每个 agent 可指定可切换的目标",
-        min_length=1,
-    )
-    handoff_mapping: dict[str, list[str]] = Field(
-        default_factory=dict,
-        description="Agent 切换映射 {agent_name: [可切换的目标列表]}",
-    )
-    default_agent: str = Field(
-        ...,
-        description="默认激活的 Agent 名称",
-    )
-
-
-class MultiAgentChatRequest(BaseModel):
-    """多 Agent 聊天请求"""
-
-    message: str = Field(..., description="用户消息", min_length=1)
-    session_id: str = Field(..., description="会话 ID")
-    user_id: str | None = Field(None, description="用户 ID")
-    stream: bool = Field(False, description="是否使用流式响应")
-
-
-class MultiAgentChatResponse(BaseModel):
-    """多 Agent 聊天响应"""
-
-    content: str = Field(..., description="响应内容")
-    session_id: str = Field(..., description="会话 ID")
-    agent_name: str | None = Field(None, description="最后响应的 Agent 名称")
-
-
-class AgentMessage(BaseModel):
-    """Agent 消息"""
-
-    role: str = Field(..., description="角色：user/assistant/system")
-    content: str = Field(..., description="消息内容")
-
-
-class MultiAgentChatHistoryResponse(BaseModel):
-    """多 Agent 聊天历史响应"""
-
-    messages: list[AgentMessage] = Field(default_factory=list, description="历史消息")
-    session_id: str = Field(..., description="会话 ID")
-
-
-class AgentSystemResponse(BaseModel):
-    """Agent 系统创建响应"""
-
-    name: str = Field(..., description="系统名称")
-    type: str = Field(..., description="系统类型: router/supervisor/swarm")
-    agents: list[str] = Field(..., description="包含的 Agent 名称列表")
-    session_id: str = Field(..., description="会话 ID")
 
 
 # ============== 单 Agent CRUD Schemas ==============

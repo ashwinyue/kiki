@@ -35,12 +35,6 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from app.agent.graphs import BaseGraph, ChatGraph
 from app.agent.graphs.react import ReactAgent, create_react_agent
-from app.agent.multi_agent import (
-    HandoffAgent,
-    RouterAgent,
-    SupervisorAgent,
-    create_multi_agent_system,
-)
 from app.agent.tools.interceptor import wrap_tools_with_interceptor
 from app.config.settings import get_settings
 from app.llm import LLMService, get_llm_service
@@ -54,9 +48,6 @@ settings = get_settings()
 AgentType = Literal[
     "chat",  # 基础对话 Agent
     "react",  # ReAct 模式 Agent
-    "router",  # 路由 Agent
-    "supervisor",  # 监督 Agent
-    "handoff",  # 切换 Agent
 ]
 
 # LLM 类型别名
@@ -72,9 +63,6 @@ LLMType = Literal[
 AGENT_LLM_MAP: dict[str, LLMType] = {
     "chat": "default",  # 对话使用默认模型
     "react": "default",  # ReAct 使用默认模型
-    "router": "default",  # 路由使用默认模型
-    "supervisor": "claude",  # 监督者使用 Claude（需要高质量决策）
-    "handoff": "default",  # 切换使用默认模型
 }
 
 
@@ -187,9 +175,6 @@ class AgentFactory:
         Agent 类型特定参数:
             - chat: 无额外参数
             - react: tools (list) - 工具列表
-            - router: agents (dict) - 子 Agent 字典
-            - supervisor: workers (dict) - Worker Agent 字典
-            - handoff: name (str), tools (list), handoff_targets (list)
         """
         # 合并配置
         if config is None:
@@ -243,24 +228,6 @@ class AgentFactory:
                     llm_service,
                     config,
                     checkpointer,
-                    **kwargs,
-                )
-            elif agent_type == "router":
-                return cls._create_router_agent(
-                    llm_service,
-                    config,
-                    **kwargs,
-                )
-            elif agent_type == "supervisor":
-                return cls._create_supervisor_agent(
-                    llm_service,
-                    config,
-                    **kwargs,
-                )
-            elif agent_type == "handoff":
-                return cls._create_handoff_agent(
-                    llm_service,
-                    config,
                     **kwargs,
                 )
             else:
@@ -354,127 +321,6 @@ class AgentFactory:
             system_prompt=config.system_prompt,
             checkpointer=checkpointer,
         )
-
-    @classmethod
-    def _create_router_agent(
-        cls,
-        llm_service: LLMService,
-        config: AgentConfig,
-        **kwargs,
-    ) -> RouterAgent:
-        """创建路由 Agent
-
-        Args:
-            llm_service: LLM 服务
-            config: Agent 配置
-            **kwargs: agents (dict) - 子 Agent 字典
-
-        Returns:
-            RouterAgent 实例
-        """
-        agents = kwargs.get("agents", {})
-        if not agents:
-            raise AgentFactoryError("Router Agent 需要 agents 参数")
-
-        return RouterAgent(
-            llm_service=llm_service,
-            agents=agents,
-            router_prompt=config.system_prompt,
-        )
-
-    @classmethod
-    def _create_supervisor_agent(
-        cls,
-        llm_service: LLMService,
-        config: AgentConfig,
-        **kwargs,
-    ) -> SupervisorAgent:
-        """创建监督 Agent
-
-        Args:
-            llm_service: LLM 服务
-            config: Agent 配置
-            **kwargs: workers (dict) - Worker Agent 字典
-
-        Returns:
-            SupervisorAgent 实例
-        """
-        workers = kwargs.get("workers", {})
-        if not workers:
-            raise AgentFactoryError("Supervisor Agent 需要 workers 参数")
-
-        return SupervisorAgent(
-            llm_service=llm_service,
-            workers=workers,
-            supervisor_prompt=config.system_prompt,
-        )
-
-    @classmethod
-    def _create_handoff_agent(
-        cls,
-        llm_service: LLMService,
-        config: AgentConfig,
-        **kwargs,
-    ) -> HandoffAgent:
-        """创建可切换 Agent
-
-        Args:
-            llm_service: LLM 服务
-            config: Agent 配置
-            **kwargs:
-                - name (str): Agent 名称
-                - tools (list): 工具列表
-                - handoff_targets (list): 可切换的目标列表
-
-        Returns:
-            HandoffAgent 实例
-        """
-        name = kwargs.get("name")
-        if not name:
-            raise AgentFactoryError("Handoff Agent 需要 name 参数")
-
-        tools = kwargs.get("tools", [])
-
-        # 包装工具拦截器
-        if config.interrupt_before_tools:
-            tools = wrap_tools_with_interceptor(tools, config.interrupt_before_tools)
-
-        handoff_targets = kwargs.get("handoff_targets", [])
-
-        return HandoffAgent(
-            name=name,
-            llm_service=llm_service,
-            tools=tools,
-            handoff_targets=handoff_targets,
-            system_prompt=config.system_prompt,
-        )
-
-    @classmethod
-    def create_multi_agent_system(
-        cls,
-        mode: Literal["router", "supervisor", "swarm"],
-        llm_service: LLMService | None = None,
-        config: AgentConfig | None = None,
-        **kwargs,
-    ) -> Any:
-        """创建多 Agent 系统（便捷方法）
-
-        Args:
-            mode: 多 Agent 模式
-            llm_service: LLM 服务
-            config: Agent 配置
-            **kwargs: 模式特定参数
-
-        Returns:
-            编译后的 StateGraph
-        """
-        if llm_service is None:
-            llm_service = cls._default_llm_service or get_llm_service()
-
-        if config is None:
-            config = AgentConfig()
-
-        return create_multi_agent_system(mode=mode, llm_service=llm_service, **kwargs)
 
 
 # 便捷函数
@@ -579,35 +425,3 @@ def create_api_agent_node(agent_config: Any) -> callable:
         return {"messages": [AIMessage(content=content)]}
 
     return agent_node
-
-
-def create_api_handoff_agent(
-    config: Any,
-    handoff_targets: list[str],
-) -> HandoffAgent:
-    """为 API 层创建可切换的 Handoff Agent
-
-    Args:
-        config: Agent 配置（来自 API schemas）
-        handoff_targets: 可切换的目标列表
-
-    Returns:
-        HandoffAgent 实例
-    """
-    llm_service = get_llm_service()
-
-    # 获取指定的工具
-    all_tools = {t.name: t for t in list_tools()}
-    agent_tools = [
-        all_tools[name]
-        for name in config.tools
-        if name in all_tools
-    ]
-
-    return HandoffAgent(
-        name=config.name,
-        llm_service=llm_service,
-        tools=agent_tools,
-        handoff_targets=handoff_targets,
-        system_prompt=config.system_prompt or None,
-    )

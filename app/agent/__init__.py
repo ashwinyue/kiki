@@ -6,7 +6,6 @@
 - tools: 工具系统（registry + builtin 示例工具）
 - tool_interceptor: 工具执行拦截器
 - agent: Agent 管理类（LangGraphAgent 门面）
-- multi_agent: 多 Agent 系统（Router/Supervisor/Swarm）
 - factory: Agent 工厂模式（统一创建接口）
 - callbacks: Callback Handler（Langfuse + Prometheus）
 - prompts: Prompt 模板管理
@@ -29,7 +28,6 @@
     │   └── builtin/      # 内置示例工具
     ├── tool_interceptor.py  # 工具拦截器（参考 DeerFlow）
     ├── agent.py          # LangGraphAgent 门面类
-    ├── multi_agent.py    # 多 Agent 系统
     ├── factory.py        # Agent 工厂（增强版，参考 DeerFlow）
     ├── callbacks/        # Callback Handlers
     ├── prompts/          # Prompt 模板
@@ -75,14 +73,6 @@ from app.agent.graphs import (
     create_react_agent,
     route_by_tools,
     tools_node,
-)
-from app.agent.multi_agent import (
-    HandoffAgent,
-    RouterAgent,
-    SupervisorAgent,
-    create_handoff_tool,
-    create_multi_agent_system,
-    create_swarm,
 )
 from app.agent.state import (
     AgentState,
@@ -271,13 +261,6 @@ __all__ = [
     "LLMType",
     "AGENT_LLM_MAP",
     "factory_create_agent",
-    # Multi-Agent
-    "RouterAgent",
-    "SupervisorAgent",
-    "HandoffAgent",
-    "create_handoff_tool",
-    "create_swarm",
-    "create_multi_agent_system",
     # Clarification - 意图澄清
     "needs_clarification",
     "should_prompt_clarification",

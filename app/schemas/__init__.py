@@ -22,14 +22,6 @@ from app.schemas.chat import (
 # Agent
 from app.schemas.agent import (
     AgentConfig,
-    RouterAgentRequest,
-    SupervisorAgentRequest,
-    SwarmAgentRequest,
-    MultiAgentChatRequest,
-    MultiAgentChatResponse,
-    AgentMessage,
-    MultiAgentChatHistoryResponse,
-    AgentSystemResponse,
     AgentRequest,
     AgentPublic,
     AgentDetailResponse,
@@ -100,17 +92,8 @@ __all__ = [
     "ChatHistoryResponse",
     "ContextStatsResponse",
     "SSEEvent",
-    # Agent - 多 Agent 协作
-    "AgentConfig",
-    "RouterAgentRequest",
-    "SupervisorAgentRequest",
-    "SwarmAgentRequest",
-    "MultiAgentChatRequest",
-    "MultiAgentChatResponse",
-    "AgentMessage",
-    "MultiAgentChatHistoryResponse",
-    "AgentSystemResponse",
     # Agent - CRUD
+    "AgentConfig",
     "AgentRequest",
     "AgentPublic",
     "AgentDetailResponse",
