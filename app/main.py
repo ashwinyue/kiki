@@ -77,7 +77,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("app_shutting_down")
 
     # 关闭 Redis 连接池
-    from app.tools.redis import close_redis
+    from app.infra.redis import close_redis
 
     await close_redis()
 
@@ -164,7 +164,7 @@ def _register_routes(app: FastAPI) -> None:
 
         检查应用状态和依赖服务（Redis）的健康状态。
         """
-        from app.tools.redis import ping as redis_ping
+        from app.infra.redis import ping as redis_ping
 
         checks = {
             "app": "healthy",

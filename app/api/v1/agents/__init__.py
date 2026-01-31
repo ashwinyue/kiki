@@ -44,7 +44,7 @@ from app.repositories.agent_async import (
     AgentRepositoryAsync,
 )
 from app.repositories.base import PaginationParams
-from app.tools.database import get_session
+from app.infra.database import get_session
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 logger = get_logger(__name__)

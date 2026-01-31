@@ -16,7 +16,7 @@ from typing import Any
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
-from app.tools.redis import RedisCache
+from app.infra.redis import RedisCache
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)

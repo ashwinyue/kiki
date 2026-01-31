@@ -242,7 +242,7 @@ class LangGraphAgent:
         try:
             from app.models.database import MessageCreate
             from app.repositories.message import MessageRepository
-            from app.tools.database import session_scope
+            from app.infra.database import session_scope
 
             async with session_scope() as session:
                 repo = MessageRepository(session)
@@ -365,7 +365,7 @@ class LangGraphAgent:
         # 尝试从数据库读取（便于会话持久化）
         try:
             from app.repositories.message import MessageRepository
-            from app.tools.database import session_scope
+            from app.infra.database import session_scope
             from langchain_core.messages import (
                 AIMessage,
                 HumanMessage,
@@ -436,7 +436,7 @@ class LangGraphAgent:
             # 清理数据库消息（最佳努力）
             try:
                 from app.repositories.message import MessageRepository
-                from app.tools.database import session_scope
+                from app.infra.database import session_scope
 
                 async with session_scope() as session:
                     repo = MessageRepository(session)

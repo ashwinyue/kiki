@@ -10,7 +10,7 @@
 
 使用示例：
     ```python
-    from app.tools.cache import cached, cache_instance
+    from app.infra.cache import cached, cache_instance
 
     # 使用装饰器
     @cached(ttl=600, key_prefix="user")

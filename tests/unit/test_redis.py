@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.tools.redis import (
+from app.infra.redis import (
     RedisCache,
     RedisLock,
     close_redis,

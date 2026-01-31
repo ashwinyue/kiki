@@ -85,7 +85,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
     async def _handle_jwt_auth(self, request: Request, payload: dict) -> bool:
         """处理 JWT Token 认证"""
-        from app.tools.database import session_scope
+        from app.infra.database import session_scope
         from app.models.database import User, Tenant
 
         user_id = payload.get("sub")
@@ -169,7 +169,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
     async def _handle_api_key_auth(self, request: Request, api_key: str) -> bool:
         """处理 API Key 认证"""
-        from app.tools.database import session_scope
+        from app.infra.database import session_scope
         from app.models.database import Tenant
 
         # 解密获取租户 ID

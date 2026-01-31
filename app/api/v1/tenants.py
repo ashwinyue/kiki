@@ -11,7 +11,7 @@ from app.auth.middleware import (
 )
 from app.models.database import Tenant, TenantCreate, TenantPublic, TenantUpdate
 from app.services.tenant import TenantService
-from app.tools.database import get_session
+from app.infra.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
