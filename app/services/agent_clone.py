@@ -55,15 +55,12 @@ class AgentCloner:
         Raises:
             ValueError: 如果源 Agent 不存在或复制失败
         """
-        # 获取源 Agent
         source_agent = await self._repo.get(agent_id)
         if source_agent is None:
             raise ValueError(f"源 Agent {agent_id} 不存在")
 
-        # 生成新名称
         new_name = data.name or f"{source_agent.name} (副本)"
 
-        # 构建新 Agent 数据
         new_agent_data = {
             "id": str(uuid4()),
             "name": new_name,
@@ -74,7 +71,6 @@ class AgentCloner:
         }
 
         try:
-            # 创建新 Agent
             new_agent = await self._repo.create_with_tools(new_agent_data)
 
             logger.info(
@@ -120,7 +116,6 @@ class AgentCloner:
 
         for agent_id in agent_ids:
             try:
-                # 构建单个复制请求
                 copy_request = AgentCopyRequest(
                     name=request.name,
                     copy_config=request.copy_config,

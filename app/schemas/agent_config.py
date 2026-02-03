@@ -8,8 +8,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-# ============== 常量定义 ==============
-
 class AgentMode:
     """Agent 模式常量"""
     QUICK_ANSWER = "quick-answer"  # RAG 模式
@@ -27,9 +25,6 @@ class FallbackStrategy:
     """兜底策略常量"""
     FIXED = "fixed"  # 固定回复
     MODEL = "model"  # 模型生成
-
-
-# ============== 配置模型 ==============
 
 
 class ModelConfig(BaseModel):
@@ -128,9 +123,6 @@ class MultiTurnConfig(BaseModel):
     history_turns: int = Field(default=5, ge=1, le=50, description="历史轮数")
 
 
-# ============== 主配置模型 ==============
-
-
 class CustomAgentConfig(BaseModel):
     """完整的 Custom Agent 配置
 
@@ -208,9 +200,6 @@ class CustomAgentConfig(BaseModel):
         default_factory=list,
         description="支持的文件类型扩展名（如 ['csv', 'xlsx']），空表示支持所有类型"
     )
-
-
-# ============== 内置 Agent 配置工厂函数 ==============
 
 
 def get_builtin_quick_answer_config() -> CustomAgentConfig:

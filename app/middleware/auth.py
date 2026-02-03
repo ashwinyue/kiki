@@ -17,7 +17,6 @@ from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
-# 无需认证的路径
 NO_AUTH_PATHS = {
     "/health",
     "/docs",
@@ -25,9 +24,6 @@ NO_AUTH_PATHS = {
     "/api/v1/auth/login",
     "/api/v1/auth/register",
 }
-
-
-# ============== FastAPI 依赖注入函数 ==============
 
 
 async def get_current_user_dep(
@@ -108,20 +104,16 @@ class TenantMiddleware(BaseHTTPMiddleware):
         self.enable_cross_tenant = enable_cross_tenant
 
     async def dispatch(self, request: Request, call_next):
-        # 清除之前的上下文
         clear_tenant_context()
 
-        # 跳过无需认证的路径
         if request.url.path in NO_AUTH_PATHS:
             return await call_next(request)
 
-        # 跳过 OPTIONS 请求
         if request.method == "OPTIONS":
             return await call_next(request)
 
         authenticated = False
 
-        # 尝试 JWT Token 认证
         authorization = request.headers.get("authorization")
         if authorization and authorization.startswith("Bearer "):
             token = authorization[7:]
@@ -135,14 +127,12 @@ class TenantMiddleware(BaseHTTPMiddleware):
                 if authenticated:
                     return await call_next(request)
 
-        # 尝试 X-API-Key 认证
         api_key = request.headers.get("x-api-key")
         if api_key:
             authenticated = await self._handle_api_key_auth(request, api_key)
             if authenticated:
                 return await call_next(request)
 
-        # 未提供认证信息 - 继续处理，由具体端点决定是否需要认证
         return await call_next(request)
 
     async def _handle_jwt_auth(self, request: Request, payload: dict) -> bool:
@@ -156,7 +146,6 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
         try:
             async with session_scope() as session:
-                # 获取用户信息
                 from sqlalchemy import select
 
                 user_stmt = select(User).where(User.id == int(user_id))
@@ -167,10 +156,8 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     logger.warning("user_not_found", user_id=user_id)
                     return False
 
-                # 确定目标租户 ID
                 target_tenant_id = user.tenant_id
 
-                # 检查跨租户访问
                 if (
                     self.enable_cross_tenant
                     and user.can_access_all_tenants
@@ -180,7 +167,6 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     if tenant_header:
                         try:
                             target_tenant_id = int(tenant_header)
-                            # 验证目标租户存在
                             tenant_stmt = select(Tenant).where(
                                 Tenant.id == target_tenant_id
                             )
@@ -202,14 +188,12 @@ class TenantMiddleware(BaseHTTPMiddleware):
                         except ValueError:
                             pass
 
-                # 获取租户信息
                 if target_tenant_id:
                     tenant_stmt = select(Tenant).where(Tenant.id == target_tenant_id)
                     tenant_result = await session.execute(tenant_stmt)
                     tenant = tenant_result.scalar_one_or_none()
 
                     if tenant:
-                        # 设置租户上下文
                         set_tenant_context(
                             TenantContext(
                                 tenant_id=tenant.id,
@@ -218,7 +202,6 @@ class TenantMiddleware(BaseHTTPMiddleware):
                                 config=tenant.config or {},
                             )
                         )
-                        # 设置到 request.state 供依赖注入使用
                         request.state.tenant_id = tenant.id
                         request.state.user_id = user.id
                         request.state.tenant = tenant
@@ -234,7 +217,6 @@ class TenantMiddleware(BaseHTTPMiddleware):
         from app.infra.database import session_scope
         from app.models.database import Tenant
 
-        # 解密获取租户 ID
         tenant_id = extract_tenant_id_from_api_key(api_key)
         if not tenant_id:
             logger.warning("invalid_api_key", api_key_prefix=api_key[:10])
@@ -273,9 +255,6 @@ class TenantMiddleware(BaseHTTPMiddleware):
             return False
 
 
-# ============== FastAPI 依赖 ==============
-
-
 async def get_tenant_id_dep(
     request: Request,
 ) -> int | None:
@@ -290,7 +269,6 @@ async def get_tenant_id_dep(
     return getattr(request.state, "tenant_id", None)
 
 
-# 兼容旧代码的别名
 get_tenant_id = get_tenant_id_dep
 
 
@@ -337,7 +315,6 @@ async def get_tenant_context_dep(
     return get_tenant_context()
 
 
-# 导出 get_tenant_context 供直接使用
 def get_tenant_context() -> TenantContext | None:
     """获取当前租户上下文
 
@@ -351,7 +328,6 @@ def get_tenant_context() -> TenantContext | None:
     return _get()
 
 
-# 类型别名
 TenantIdDep = Annotated[int | None, Depends(get_tenant_id_dep)]
 RequiredTenantIdDep = Annotated[int, Depends(require_tenant)]
 TenantContextDep = Annotated[TenantContext | None, Depends(get_tenant_context_dep)]

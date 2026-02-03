@@ -1,7 +1,5 @@
 """Pydantic 模式定义"""
 
-# 统一响应
-# Agent
 from app.schemas.agent import (
     AgentConfig,
     AgentCopyRequest,
@@ -14,7 +12,6 @@ from app.schemas.agent import (
     BatchAgentCopyResponse,
 )
 
-# 聊天
 from app.schemas.chat import (
     ChatHistoryResponse,
     ChatRequest,
@@ -24,14 +21,12 @@ from app.schemas.chat import (
     StreamChatRequest,
 )
 
-# MCP 服务
 from app.schemas.mcp_service import (
     MCPServiceListResponse,
     MCPServiceRequest,
     MCPServiceResponse,
 )
 
-# 消息
 from app.schemas.message import (
     MessageListResponse,
     MessageRegenerateRequest,
@@ -40,7 +35,6 @@ from app.schemas.message import (
     MessageUpdate,
 )
 
-# 模型
 from app.schemas.model import (
     ModelCreate,
     ModelParameters,
@@ -49,6 +43,7 @@ from app.schemas.model import (
     ModelType,
     ModelUpdate,
 )
+
 from app.schemas.response import (
     ApiResponse,
     DataResponse,
@@ -56,7 +51,6 @@ from app.schemas.response import (
     PaginationMeta,
 )
 
-# 会话
 from app.schemas.session import (
     GenerateTitleRequest,
     SessionCreate,
@@ -66,7 +60,6 @@ from app.schemas.session import (
     SessionUpdate,
 )
 
-# 租户
 from app.schemas.tenant import (
     ApiKeyResponse,
     TenantItem,

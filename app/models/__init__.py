@@ -23,7 +23,14 @@ from app.models.agent_execution import (
     AgentType,
     ExecutionStatus,
 )
-from app.models.custom_agent import (
+from app.models.agent_config import (
+    # 新名称（推荐使用）
+    AgentConfig,
+    AgentConfigBase,
+    AgentConfigCreate,
+    AgentConfigUpdate,
+    AgentConfigPublic,
+    # 旧名称（向后兼容，已废弃）
     Agent,
     AgentCreate,
     AgentPublic,
@@ -42,6 +49,7 @@ from app.models.llm_model import (
     ModelBase,
     ModelCreate,
     ModelUpdate,
+)
 )
 
 # ============== MCP 服务 ==============
@@ -87,6 +95,7 @@ from app.models.thread import (
     ThreadCreate,
     ThreadPublic,
 )
+from app.models.timestamp import TimestampMixin
 from app.models.user import (
     User,
     UserCreate,
@@ -134,7 +143,13 @@ __all__ = [
     "MessageCreate",
     "MessageUpdate",
     "MessagePublic",
-    # Agent
+    # Agent Config
+    "AgentConfig",
+    "AgentConfigBase",
+    "AgentConfigCreate",
+    "AgentConfigUpdate",
+    "AgentConfigPublic",
+    # 向后兼容（已废弃）
     "Agent",
     "AgentCreate",
     "AgentUpdate",

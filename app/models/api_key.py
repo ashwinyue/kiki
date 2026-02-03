@@ -10,7 +10,6 @@ from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Column, Field, SQLModel
 
-# ============== 枚举类型 ==============
 
 
 class ApiKeyType(str, Enum):
@@ -30,7 +29,6 @@ class ApiKeyStatus(str, Enum):
     EXPIRED = "expired"  # 已过期
 
 
-# ============== 数据库模型 ==============
 
 
 class ApiKeyBase(SQLModel):
@@ -61,7 +59,6 @@ class ApiKey(ApiKeyBase, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-# ============== 创建/更新模型 ==============
 
 
 class ApiKeyCreate(SQLModel):
@@ -86,7 +83,6 @@ class ApiKeyUpdate(SQLModel):
     expires_at: datetime | None = None
 
 
-# ============== 响应模型 ==============
 
 
 class ApiKeyRead(SQLModel):

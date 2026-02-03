@@ -7,8 +7,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-# ============== Agent 配置 Schemas ==============
-
 
 class AgentConfig(BaseModel):
     """Agent 基础配置"""
@@ -16,9 +14,6 @@ class AgentConfig(BaseModel):
     name: str = Field(..., description="Agent 名称")
     system_prompt: str = Field("", description="系统提示词")
     tools: list[str] = Field(default_factory=list, description="使用的工具名称列表")
-
-
-# ============== 单 Agent CRUD Schemas ==============
 
 
 class AgentRequest(BaseModel):
@@ -71,9 +66,6 @@ class AgentListResponse(BaseModel):
     pages: int
 
 
-# ============== Agent 复制 Schemas ==============
-
-
 class AgentCopyRequest(BaseModel):
     """Agent 复制请求（对齐 WeKnora Copy API）"""
 
@@ -121,9 +113,6 @@ class BatchAgentCopyResponse(BaseModel):
     errors: dict[str, str] = Field(
         default_factory=dict, description="失败的 Agent ID 及错误信息"
     )
-
-
-# ============== 占位符 Schemas ==============
 
 
 class PlaceholderSchema(BaseModel):

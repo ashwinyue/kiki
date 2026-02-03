@@ -251,9 +251,6 @@ class AgentExecutionRepository:
         }
 
 
-# ============== 调用链追踪服务 ==============
-
-
 class AgentExecutionTracker:
     """Agent 调用链追踪服务
 

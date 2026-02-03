@@ -2,12 +2,13 @@
 
 提供 LangChain 工具的注册、管理和执行。
 集成 MCP (Model Context Protocol) 工具支持。
+自动为所有工具添加 Prometheus 监控。
 
 使用示例:
     ```python
     from app.agent.tools import register_tool, list_tools, get_tool_node
 
-    # 注册自定义工具
+    # 注册自定义工具（自动启用监控）
     @register_tool
     async def my_tool(query: str) -> str:
         \"\"\"我的自定义工具\"\"\"
@@ -18,6 +19,10 @@
 
     # 获取工具节点（异步方式，包含 MCP 工具）- 推荐
     tool_node = await aget_tool_node()
+
+    # 获取工具健康度报告
+    from app.agent.tools import get_tool_health_report
+    report = get_tool_health_report()
     ```
 """
 
@@ -40,6 +45,18 @@ from app.agent.tools.decorators import (
     log_io,
     log_io_async,
     track_tool_metrics,
+)
+from app.agent.tools.observability import (
+    MonitoredTool,
+    format_health_report,
+    get_tool_health_report,
+    monitor_tool_execution,
+    wrap_tools_with_monitoring,
+    _tool_stats,
+    tool_active_gauge,
+    tool_errors_total,
+    tool_health_score,
+    tool_slow_calls_total,
 )
 
 # 导出工具注册系统
@@ -117,6 +134,17 @@ __all__ = [
     "create_logged_tool",
     "LoggedToolMixin",
     "track_tool_metrics",
+    # 工具监控（新增）
+    "MonitoredTool",
+    "monitor_tool_execution",
+    "wrap_tools_with_monitoring",
+    "get_tool_health_report",
+    "format_health_report",
+    "_tool_stats",
+    "tool_active_gauge",
+    "tool_errors_total",
+    "tool_health_score",
+    "tool_slow_calls_total",
     # 搜索结果处理
     "SearchResultPostProcessor",
     "is_pdf_url",

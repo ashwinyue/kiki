@@ -17,7 +17,7 @@ from app.observability.logging import get_logger
 logger = get_logger(__name__)
 
 
-# ============== MCP 客户端 ==============
+# MCP 客户端
 
 
 class MCPClient:
@@ -269,7 +269,7 @@ class MCPClient:
                 self._initialized = False
 
 
-# ============== MCP 服务器注册表 ==============
+# MCP 服务器注册表
 
 
 class MCPRegistry:
@@ -388,7 +388,7 @@ class MCPRegistry:
             await client.close()
 
 
-# ============== 便捷函数 ==============
+# 便捷函数
 
 
 async def register_mcp_from_config(config: dict) -> MCPClient:
@@ -463,7 +463,7 @@ async def load_mcp_tools(
     return MCPRegistry.get_all_tools(tenant_id=tenant_id, include_global=include_global)
 
 
-# ============== 预定义的 MCP 服务器配置 ==============
+# 预定义的 MCP 服务器配置
 
 # 常用的 MCP 服务器
 PREDEFINED_MCP_SERVERS = {

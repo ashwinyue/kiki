@@ -149,12 +149,26 @@ class ToolRegistry(BaseToolRegistry):
         self._error_handler = error_handler or default_tool_error_handler
         self._lock = RLock()  # 实例锁，保护当前实例
 
-    def register(self, tool_obj: BaseTool) -> None:
+    def register(self, tool_obj: BaseTool, enable_monitoring: bool = True) -> None:
         """注册工具到注册表（线程安全）
 
         Args:
             tool_obj: LangChain 工具实例
+            enable_monitoring: 是否启用监控（默认 True）
         """
+        # 自动应用监控包装器
+        if enable_monitoring:
+            try:
+                from app.agent.tools.observability import MonitoredTool
+
+                # 只对非 MonitoredTool 进行包装
+                if not isinstance(tool_obj, MonitoredTool):
+                    tool_obj = MonitoredTool.wrap(tool_obj)
+                    logger.debug("tool_monitoring_enabled", tool_name=tool_obj.name)
+            except ImportError:
+                # 监控模块不可用，跳过
+                pass
+
         with self._lock:
             self._registry[tool_obj.name] = tool_obj
             logger.info(

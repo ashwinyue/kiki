@@ -60,8 +60,8 @@ class Session(TimestampMixin, SessionBase, table=True):
         description="Supervisor 配置（supervisor 模式使用）",
     )
 
-    # ========== 保留的兼容字段（建议移至 CustomAgent） ==========
-    # TODO: 这些字段未来应移至 CustomAgent.config
+    # ========== 保留的兼容字段（建议移至 AgentConfig） ==========
+    # TODO: 这些字段未来应移至 AgentConfig.config
     max_rounds: int = Field(default=5)
     enable_rewrite: bool = Field(default=True)
     fallback_strategy: str = Field(default="fixed", max_length=255)

@@ -48,8 +48,6 @@ class McpServiceService:
             self._repository = MCPServiceRepository(self.session)
         return self._repository
 
-    # ============== 响应构建方法 ==============
-
     def _to_dict(self, service: MCPService) -> dict:
         """转换为字典响应
 
@@ -74,8 +72,6 @@ class McpServiceService:
             "env_vars": service.env_vars,
             "created_at": service.created_at.isoformat() if service.created_at else None,
         }
-
-    # ============== 权限验证 ==============
 
     async def _verify_access(self, service: MCPService, tenant_id: int) -> MCPService:
         """验证租户对服务的访问权限
@@ -130,8 +126,6 @@ class McpServiceService:
             )
 
         return await self._verify_access(service, tenant_id)
-
-    # ============== CRUD 操作 ==============
 
     async def list_services(
         self,
@@ -276,9 +270,6 @@ class McpServiceService:
             service_id=service_id,
             tenant_id=tenant_id,
         )
-
-
-# ============== 依赖注入工厂 ==============
 
 
 def get_mcp_service(

@@ -52,7 +52,7 @@ async def agent_execution_context(
     """
     tracker = AgentExecutionTracker(session)
 
-    execution = await tracker.start_execution(
+    _ = await tracker.start_execution(
         session_id=session_id,
         thread_id=thread_id,
         agent_id=agent_id,
@@ -174,7 +174,8 @@ def create_worker_node(agent_id: str, agent_config: dict[str, Any]):
         """Worker agent 执行节点（包含完整追踪）"""
         from sqlalchemy.ext.asyncio import AsyncSession
 
-        from app.agent.chat_agent import ChatAgent
+        from app.agent.graph import create_agent
+        from app.agent.graph.agents import get_agent_config
 
         logger.info("worker_agent_starting", agent_id=agent_id)
 
@@ -214,14 +215,37 @@ def create_worker_node(agent_id: str, agent_config: dict[str, Any]):
             # 更新 state 中的当前执行 ID（供子 agent 使用）
             state["current_execution_id"] = execution.id
 
-            # 创建 ChatAgent 实例
-            agent = ChatAgent(
-                system_prompt=agent_config.get("system_prompt"),
-                tenant_id=config.get("tenant_id"),
+            # 使用新的 Agent 工厂创建 CompiledStateGraph
+            # 如果 agent_config 中有 agent_type，使用它；否则使用 "worker"
+            agent_type = agent_config.get("agent_type", "worker")
+            prompt_template = agent_config.get("prompt_template", "chat")
+            tools = agent_config.get("tools", [])
+
+            # 尝试从 AGENT_REGISTRY 获取配置
+            try:
+                registry_config = get_agent_config(agent_id)
+                agent_type = registry_config["agent_type"]
+                prompt_template = registry_config["prompt_template"]
+                tools = registry_config["tools"]()
+            except KeyError:
+                # 如果 AGENT_REGISTRY 中没有，使用 agent_config
+                pass
+
+            # 创建 Agent 图
+            agent = create_agent(
+                agent_name=agent_id,
+                agent_type=agent_type,
+                tools=tools,
+                prompt_template=prompt_template,
             )
 
-            # 执行 agent
-            response = await agent.get_response(user_input, session_id)
+            # 执行 agent（使用 CompiledStateGraph 的 ainvoke）
+            result = await agent.ainvoke(
+                {"messages": messages},
+                {"configurable": {"thread_id": thread_id}},
+            )
+
+            response = result.get("messages", messages)
 
             # 记录输出
             await tracker.complete_current_execution(

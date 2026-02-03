@@ -24,7 +24,6 @@ logger = get_logger(__name__)
 # ${variable_name} - 简单格式
 _PLACEHOLDER_PATTERN = re.compile(r"\{\{([^}]+)\}\}|\$\{([^}]+)\}")
 
-# Jinja2 环境
 _jinja_env: Environment | None = None
 
 
@@ -89,7 +88,6 @@ def convert_simple_template(template: str) -> str:
     Returns:
         转换后的模板
     """
-    # 替换 ${var} 为 {{ var }}
     return re.sub(r"\$\{([^}]+)\}", r"{{ \1 }}", template)
 
 
@@ -128,16 +126,13 @@ def render_template(
     if not template:
         return ""
 
-    # 转换简单格式
     template = convert_simple_template(template)
 
     try:
         env = _get_jinja_env()
         jinja_template = env.from_string(template)
 
-        # 在非严格模式下，添加缺失变量的默认处理
         if not strict:
-            # 为缺失的变量提供空字符串默认值
             result = jinja_template.render(**variables)
         else:
             result = jinja_template.render(**variables)
@@ -148,7 +143,6 @@ def render_template(
         if strict:
             logger.error("template_render_error", error=str(e))
             raise
-        # 非严格模式下，返回原始模板
         logger.warning("template_render_fallback", error=str(e))
         return template
 
@@ -177,7 +171,6 @@ def validate_variable(
         (False, 'email 格式不匹配')
     """
     try:
-        # 类型检查
         if variable_type == "string":
             if value is None:
                 return False, f"{name} 不能为空"
@@ -205,7 +198,7 @@ def validate_variable(
             if value is None or value == "":
                 return True, None  # 空 JSON 允许
             if isinstance(value, str):
-                json.loads(value)  # 验证 JSON 格式
+                json.loads(value)
             str_value = str(value)
         elif variable_type == "array":
             if value is None:
@@ -214,10 +207,8 @@ def validate_variable(
                 return False, f"{name} 必须是数组"
             str_value = str(value)
         else:
-            # 未知类型，仅检查非空
             str_value = str(value) if value is not None else ""
 
-        # 正则验证（仅对 string 类型）
         if validation_rule and variable_type == "string":
             if not re.match(validation_rule, str_value):
                 return False, f"{name} 格式不匹配"
@@ -257,12 +248,10 @@ def validate_variables(
     for name, definition in definitions.items():
         value = variables.get(name)
 
-        # 检查必填
         if definition.get("required", False) and not value:
             errors[name] = f"{name} 是必填项"
             continue
 
-        # 有值才验证
         if value:
             variable_type = definition.get("type", "string")
             validation_rule = definition.get("validation_rule")
@@ -306,7 +295,6 @@ def render_with_defaults(
         >>> render_with_defaults("Hello {{name}}, {{title}}!", {}, defs)
         ('Hello Guest, User!', [], {})
     """
-    # 合并默认值
     merged_vars = {}
     missing_vars = []
     validation_errors = {}
@@ -319,7 +307,6 @@ def render_with_defaults(
         else:
             missing_vars.append(var_name)
 
-        # 验证
         if var_name in merged_vars:
             definition_errors = validate_variables(
                 {var_name: merged_vars[var_name]},
@@ -327,7 +314,6 @@ def render_with_defaults(
             )
             validation_errors.update(definition_errors)
 
-    # 渲染
     result = render_template(template, merged_vars, strict=strict)
 
     return result, missing_vars, validation_errors
@@ -354,7 +340,6 @@ def preview_render(
             "used_placeholders": ["使用的占位符"]
         }
     """
-    # 构建占位符定义字典
     definitions: dict[str, dict[str, Any]] = {}
     if placeholders:
         for p in placeholders:
@@ -365,10 +350,8 @@ def preview_render(
                 "validation_rule": p.get("validation_rule"),
             }
 
-    # 提取模板中的变量
     template_vars = extract_variables(template)
 
-    # 渲染
     rendered, missing, validation_errors = render_with_defaults(
         template,
         values,
@@ -376,7 +359,6 @@ def preview_render(
         strict=False,
     )
 
-    # 找出实际使用的占位符
     used_placeholders = [
         var for var in template_vars if var in values or var in definitions
     ]

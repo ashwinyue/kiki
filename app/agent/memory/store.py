@@ -15,9 +15,6 @@ from app.observability.logging import get_logger
 logger = get_logger(__name__)
 
 
-# ============== Store 接口实现 ==============
-
-
 class PostgresStore:
     """PostgreSQL 实现的 LangGraph Store
 
@@ -212,9 +209,6 @@ class PostgresStore:
             return []
 
 
-# ============== 工厂函数 ==============
-
-
 async def create_store(session: AsyncSession) -> PostgresStore:
     """创建 Store 实例
 
@@ -225,9 +219,6 @@ async def create_store(session: AsyncSession) -> PostgresStore:
         PostgresStore 实例
     """
     return PostgresStore(session)
-
-
-# ============== 内存 Store（开发用）=============
 
 
 class InMemoryStore:
@@ -276,9 +267,6 @@ class InMemoryStore:
         return list(self._data.get(namespace, {}).keys())
 
 
-# ============== 辅助函数 ==============
-
-
 def user_namespace(user_id: int | str) -> str:
     """生成用户命名空间
 
@@ -313,9 +301,6 @@ def agent_namespace(agent_id: str) -> str:
         命名空间字符串，如 "agent:agent-1"
     """
     return f"agent:{agent_id}"
-
-
-# ============== 预定义键名 ==============
 
 
 class StoreKeys:

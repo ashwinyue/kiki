@@ -24,15 +24,18 @@ from app.agent.graph.advanced_builder import (
     run_advanced_generation,
 )
 
-# Agent 工厂（分层 LLM + create_react_agent）
-from app.agent.graph.agent_factory import (
-    create_agent,
-    create_agents,
-    create_analyst_agent,
-    create_coder_agent,
-    create_planner_agent,
-    create_reporter_agent,
-    create_researcher_agent,
+# Agent 工厂（参考 DeerFlow 设计）
+from app.agent.graph.agent_factory import create_agent
+
+# Agent 配置
+from app.agent.graph.agents import (
+    AGENT_REGISTRY,
+    CHAT_TEAM,
+    RESEARCH_TEAM,
+    SUPERVISOR_TEAM,
+    get_agent_config,
+    list_agents,
+    list_agents_by_type,
 )
 from app.agent.graph.builder import (
     build_chat_graph,
@@ -179,12 +182,14 @@ __all__ = [
     "create_react_agent",
     # ============== Agent 工厂 ==============
     "create_agent",
-    "create_agents",
-    "create_planner_agent",
-    "create_researcher_agent",
-    "create_analyst_agent",
-    "create_coder_agent",
-    "create_reporter_agent",
+    # ============== Agent 配置 ==============
+    "AGENT_REGISTRY",
+    "get_agent_config",
+    "list_agents",
+    "list_agents_by_type",
+    "RESEARCH_TEAM",
+    "SUPERVISOR_TEAM",
+    "CHAT_TEAM",
     # ============== 高级图构建器（三层记忆架构）=============
     "AdvancedGenerationBuilder",
     "create_advanced_generation_workflow",

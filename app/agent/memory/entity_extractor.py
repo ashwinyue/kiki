@@ -25,9 +25,6 @@ from app.observability.logging import get_logger
 logger = get_logger(__name__)
 
 
-# ============== 数据模型 ==============
-
-
 class EntityType(str, Enum):
     """实体类型
 
@@ -94,9 +91,6 @@ class ExtractEntitiesResponse(BaseModel):
 
     entities: list[Entity] = Field(default_factory=list, description="提取的实体列表")
     text_summary: str = Field("", description="文本摘要")
-
-
-# ============== 实体提取器 ==============
 
 
 class EntityExtractor:
@@ -272,9 +266,6 @@ class EntityExtractor:
         )
 
         return unique_entities
-
-
-# ============== 实体存储 ==============
 
 
 class EntityStore:

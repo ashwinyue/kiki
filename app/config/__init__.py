@@ -1,7 +1,4 @@
-"""配置管理模块
-
-提供环境配置、运行时配置、依赖注入和错误处理。
-"""
+"""配置管理模块"""
 
 from app.config.dependencies import (
     AgentContainer,
@@ -32,16 +29,13 @@ from app.config.runtime import (
 from app.config.settings import Settings, get_settings
 
 __all__ = [
-    # Settings
     "Settings",
     "get_settings",
     "get_settings_dep",
-    # Runtime Config
     "Configuration",
     "AgentRuntimeConfig",
     "get_runtime_config",
     "get_agent_runtime_config",
-    # Dependencies
     "AgentContainer",
     "get_llm_service_dep",
     "get_agent_dep",
@@ -49,7 +43,6 @@ __all__ = [
     "get_memory_manager_factory_dep",
     "get_context_manager_dep",
     "get_checkpointer_dep",
-    # Errors
     "ErrorSeverity",
     "ErrorCategory",
     "ErrorContext",

@@ -39,21 +39,17 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         self.exclude_paths = exclude_paths or {"/health", "/metrics", "/docs", "/openapi.json"}
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # 跳过排除的路径
         if request.url.path in self.exclude_paths:
             return await call_next(request)
 
-        # 生成请求 ID
         request_id = str(uuid.uuid4())
 
-        # 绑定上下文
         bind_context(
             request_id=request_id,
             path=request.url.path,
             method=request.method,
         )
 
-        # 记录请求开始
         logger.info(
             "request_started",
             path=request.url.path,
@@ -61,25 +57,20 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             client=request.client.host if request.client else None,
         )
 
-        # 计时
         start_time = time.time()
 
         try:
             async with track_http_request(request.method, request.url.path):
-                # 处理请求
                 response = await call_next(request)
 
-                # 计算耗时
                 duration = time.time() - start_time
 
-                # 记录响应
                 logger.info(
                     "request_completed",
                     status_code=response.status_code,
                     duration_seconds=round(duration, 4),
                 )
 
-                # 添加响应头
                 response.headers["X-Request-ID"] = request_id
                 response.headers["X-Process-Time"] = str(round(duration, 4))
 
@@ -97,7 +88,6 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             raise
 
         finally:
-            # 清空上下文
             clear_context()
 
 
@@ -108,13 +98,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # 提取用户 ID（如果已认证）
         user_id = getattr(request.state, "user_id", None) or request.headers.get("X-User-ID")
 
         if user_id:
             bind_context(user_id=user_id)
 
-        # 提取会话 ID
         session_id = getattr(request.state, "session_id", None) or request.headers.get(
             "X-Session-ID"
         )

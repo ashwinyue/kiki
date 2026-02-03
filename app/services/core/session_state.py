@@ -76,11 +76,9 @@ class SessionStateManager:
         self._stop_cache = get_cache(key_prefix="kiki:session:stop:")
 
     def _make_state_key(self, session_id: str) -> str:
-        """生成状态键"""
         return f"state:{session_id}"
 
     def _make_stop_key(self, session_id: str) -> str:
-        """生成停止标记键"""
         return f"stopped:{session_id}"
 
     async def get_state(self, session_id: str) -> SessionStateInfo | None:
@@ -283,11 +281,9 @@ class SessionStateManager:
             是否成功设置停止标记
         """
         try:
-            # 设置停止标记（用于流式处理器检查）
             stop_key = self._make_stop_key(session_id)
             stop_success = await self._stop_cache.set(stop_key, "1", ttl=300)
 
-            # 设置状态为 STOPPING
             state_success = await self.set_stopping(session_id)
 
             if stop_success or state_success:
@@ -328,7 +324,6 @@ class SessionStateManager:
             stop_key = self._make_stop_key(session_id)
             success = await self._stop_cache.delete(stop_key)
 
-            # 同时重置状态为 IDLE
             await self.set_idle(session_id)
 
             if success:
@@ -353,7 +348,6 @@ class SessionStateManager:
             state_key = self._make_state_key(session_id)
             stop_key = self._make_stop_key(session_id)
 
-            # 清除状态和停止标记
             await self._cache.delete(state_key)
             await self._stop_cache.delete(stop_key)
 

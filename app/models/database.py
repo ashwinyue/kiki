@@ -10,16 +10,12 @@
 - app/models/memory.py - 长期记忆相关
 """
 
-# ============== 重新导出各模型 ==============
 
-# 用户
-# 任务模块已移除（Celery 任务队列）
-# Token
+
 from datetime import datetime
 
 from sqlmodel import SQLModel
 
-# 长期记忆
 from app.models.memory import (
     Memory,
     MemoryCreate,
@@ -27,7 +23,6 @@ from app.models.memory import (
     MemoryUpdate,
 )
 
-# 消息
 from app.models.message import (
     Message,
     MessageCreate,
@@ -35,7 +30,6 @@ from app.models.message import (
     MessageUpdate,
 )
 
-# 会话
 from app.models.session import (
     ChatSession,
     Session,
@@ -44,7 +38,6 @@ from app.models.session import (
     SessionUpdate,
 )
 
-# 租户
 from app.models.tenant import (
     Tenant,
     TenantCreate,
@@ -52,7 +45,6 @@ from app.models.tenant import (
     TenantUpdate,
 )
 
-# 线程
 from app.models.thread import (
     Thread,
     ThreadCreate,
@@ -86,39 +78,32 @@ class TokenPayload(SQLModel):
 
 
 __all__ = [
-    # 用户
     "User",
     "UserCreate",
     "UserUpdate",
     "UserPublic",
     "hash_password",
     "verify_password",
-    # 租户
     "Tenant",
     "TenantCreate",
     "TenantUpdate",
     "TenantPublic",
-    # 会话
     "ChatSession",
     "Session",
     "SessionCreate",
     "SessionUpdate",
     "SessionPublic",
-    # 消息
     "Message",
     "MessageCreate",
     "MessageUpdate",
     "MessagePublic",
-    # 线程
     "Thread",
     "ThreadCreate",
     "ThreadPublic",
-    # 长期记忆
     "Memory",
     "MemoryCreate",
     "MemoryUpdate",
     "MemoryPublic",
-    # Token
     "Token",
     "TokenPayload",
 ]

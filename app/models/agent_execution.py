@@ -113,7 +113,6 @@ class AgentExecutionPublic(AgentExecutionBase):
     duration_ms: int | None
 
 
-# ============== 辅助类 ==============
 
 
 class AgentType:
@@ -135,13 +134,11 @@ class ExecutionStatus:
 
 
 __all__ = [
-    # 模型
     "AgentExecution",
     "AgentExecutionBase",
     "AgentExecutionCreate",
     "AgentExecutionUpdate",
     "AgentExecutionPublic",
-    # 常量
     "AgentType",
     "ExecutionStatus",
 ]

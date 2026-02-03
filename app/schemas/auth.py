@@ -11,8 +11,6 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.schemas.response import ApiResponse
 
-# ============== 请求模型 ==============
-
 
 class RegisterRequest(BaseModel):
     """注册请求
@@ -56,9 +54,6 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=6, description="密码")
 
 
-# ============== 响应模型 ==============
-
-
 class TokenResponse(BaseModel):
     """Token 响应"""
 
@@ -85,9 +80,6 @@ class UserWithTokenResponse(UserResponse):
     token_type: Literal["bearer"] = Field("bearer", description="令牌类型")
 
 
-# ============== 会话模型 ==============
-
-
 class SessionResponse(BaseModel):
     """会话响应"""
 
@@ -106,9 +98,6 @@ class SessionListItem(BaseModel):
     message_count: int = Field(0, ge=0, description="消息数量")
 
 
-# ============== API Key 模型 ==============
-
-
 class APIKeyRequest(BaseModel):
     """API Key 创建请求"""
 
@@ -125,9 +114,6 @@ class APIKeyResponse(BaseModel):
     expires_at: str | None = Field(None, description="过期时间（ISO 8601）")
 
 
-# ============== 带统一包装的响应类型 ==============
-
-
 class AuthResultResponse(ApiResponse[UserWithTokenResponse]):
     """认证结果响应（带统一包装）"""
 
@@ -138,9 +124,6 @@ class TokenResultResponse(ApiResponse[TokenResponse]):
     """Token 结果响应（带统一包装）"""
 
     pass
-
-
-# ============== Token 刷新 ==============
 
 
 class TokenRefreshRequest(BaseModel):
@@ -157,9 +140,6 @@ class TokenRefreshResponse(BaseModel):
     expires_at: str | None = Field(None, description="过期时间（ISO 8601）")
 
 
-# ============== Token 验证 ==============
-
-
 class TokenValidateRequest(BaseModel):
     """Token 验证请求"""
 
@@ -173,9 +153,6 @@ class TokenValidateResponse(BaseModel):
     user_id: int | None = Field(None, description="用户 ID（仅在有效时返回）")
     expires_at: str | None = Field(None, description="过期时间（ISO 8601）")
     message: str | None = Field(None, description="状态消息")
-
-
-# ============== 密码修改 ==============
 
 
 class ChangePasswordRequest(BaseModel):

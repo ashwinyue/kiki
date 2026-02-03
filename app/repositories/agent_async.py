@@ -1,7 +1,7 @@
 """Agent 异步仓储模块
 
-提供 Agent 的异步数据访问层，兼容 BaseRepository 模式。
-对齐 WeKnora99 CustomAgent 模型。
+提供 Agent 配置的异步数据访问层，兼容 BaseRepository 模式。
+对齐 DeerFlow 和 WeKnora99 设计。
 """
 
 from datetime import UTC, datetime
@@ -11,14 +11,15 @@ from uuid import uuid4
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.custom_agent import CustomAgent
+from app.models.agent_config import AgentConfig
 from app.observability.logging import get_logger
 from app.repositories.base import BaseRepository, PaginatedResult, PaginationParams
 
 logger = get_logger(__name__)
 
 # 向后兼容别名
-Agent = CustomAgent
+Agent = AgentConfig
+CustomAgent = AgentConfig  # 向后兼容
 
 
 class AgentRepositoryAsync(BaseRepository[Agent]):

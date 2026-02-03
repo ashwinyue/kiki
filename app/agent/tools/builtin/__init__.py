@@ -21,6 +21,11 @@ from app.agent.tools.builtin.crawl import (
     crawl_url,
 )
 from app.agent.tools.builtin.database import search_database
+from app.agent.tools.builtin.rag import (
+    add_knowledge,
+    clear_knowledge_base,
+    search_knowledge_base,
+)
 from app.agent.tools.builtin.python_repl import (
     SafePythonREPL,
     get_repl,
@@ -56,6 +61,10 @@ __all__ = [
     "search_database",
     "get_weather",
     "calculate",
+    # RAG 知识库
+    "search_knowledge_base",
+    "add_knowledge",
+    "clear_knowledge_base",
     # 工具类
     "TavilySearchTool",
 ]

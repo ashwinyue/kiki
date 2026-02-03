@@ -12,7 +12,6 @@ from app.middleware.auth import (
     TenantIdDep,
     TenantMiddleware,
     get_current_tenant_id,
-    # 新增：用户认证依赖
     get_current_user_dep,
     get_tenant_context,
     get_tenant_context_dep,
@@ -31,7 +30,6 @@ from app.middleware.security import (
 )
 
 __all__ = [
-    # Auth
     "TenantMiddleware",
     "get_tenant_context",
     "get_tenant_id_dep",
@@ -41,14 +39,11 @@ __all__ = [
     "TenantContextDep",
     "get_tenant_context_dep",
     "get_tenant_id",
-    # 新增
     "get_current_user_dep",
     "require_current_user",
     "get_current_tenant_id",
-    # Observability
     "ObservabilityMiddleware",
     "RequestContextMiddleware",
-    # Security
     "SecurityHeadersMiddleware",
     "MaxRequestSizeMiddleware",
 ]

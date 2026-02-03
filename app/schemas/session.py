@@ -67,9 +67,6 @@ class GenerateTitleRequest(BaseModel):
     model_name: str | None = Field(None, description="使用的模型名称，为空则使用默认模型")
 
 
-# ============== 会话状态相关模式 ==============
-
-
 class SessionStateEnum(str, Enum):
     """会话状态枚举（用于 API 响应）"""
 
@@ -87,7 +84,6 @@ class SessionStopRequest(BaseModel):
     force: bool = Field(default=False, description="是否强制停止")
 
 
-# 默认实例（用于 FastAPI 参数默认值）
 _DEFAULT_SESSION_STOP_REQUEST = SessionStopRequest()
 
 
@@ -107,9 +103,6 @@ class SessionStateResponse(BaseModel):
     state: SessionStateEnum = Field(..., description="会话状态")
     is_running: bool = Field(..., description="是否运行中")
     is_stopping: bool = Field(..., description="是否停止中")
-
-
-# ============== 继续流相关模式 ==============
 
 
 class ContinueStreamRequest(BaseModel):

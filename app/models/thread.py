@@ -26,17 +26,13 @@ class Thread(TimestampMixin, ThreadBase, table=True):
 
     __tablename__ = "threads"
 
-    # 主键（字符串类型的 thread_id）
     id: str = Field(max_length=255, primary_key=True)
-    # 关联字段
     user_id: int | None = Field(default=None, foreign_key="users.id")
     tenant_id: int | None = Field(default=None)
-    status: str = Field(default="active", max_length=50)  # active, archived, deleted
+    status: str = Field(default="active", max_length=50)
     deleted_at: datetime | None = Field(default=None)
 
-    # 关系
     user: "User | None" = Relationship(back_populates="threads")
-    # tenant: Tenant | None = Relationship(back_populates="threads")
 
 
 class ThreadCreate(ThreadBase):

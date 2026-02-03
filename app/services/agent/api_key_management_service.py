@@ -52,8 +52,6 @@ class ApiKeyManagementService:
             self._repository = ApiKeyRepository(self.session)
         return self._repository
 
-    # ============== 响应构建方法 ==============
-
     def _to_response(self, api_key: ApiKey, full_key: str | None = None) -> ApiKeyResponse:
         """转换为 API Key 响应
 
@@ -98,8 +96,6 @@ class ApiKeyManagementService:
             updated_at=api_key.updated_at,
         )
 
-    # ============== 权限验证 ==============
-
     async def _verify_ownership(self, api_key_id: int, user_id: int) -> ApiKey:
         """验证 API Key 归属
 
@@ -128,8 +124,6 @@ class ApiKeyManagementService:
             )
 
         return api_key
-
-    # ============== CRUD 操作 ==============
 
     async def create_api_key(
         self,
@@ -355,9 +349,6 @@ class ApiKeyManagementService:
         )
 
         return await self.create_api_key(data, user_id)
-
-
-# ============== 依赖注入工厂 ==============
 
 
 def get_api_key_management_service(

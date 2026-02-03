@@ -94,7 +94,6 @@ def create_llm_retry_decorator(
             return await llm_service.generate(messages)
         ```
     """
-    # 从配置获取默认值
     _max_attempts = max_attempts or getattr(settings, "LLM_MAX_RETRIES", 3)
     _min_wait = min_wait or getattr(settings, "LLM_RETRY_MIN_WAIT", 1.0)
     _max_wait = max_wait or getattr(settings, "LLM_RETRY_MAX_WAIT", 10.0)
@@ -106,7 +105,6 @@ def create_llm_retry_decorator(
         exceptions=(
             ConnectionError,
             TimeoutError,
-            # 可以添加更多 LLM 相关异常
         ),
     )
 
@@ -189,7 +187,6 @@ def is_retryable_error(exception: Exception) -> bool:
         return False
     if isinstance(exception, RetryableError):
         return True
-    # 默认不可重试
     return False
 
 
@@ -238,16 +235,13 @@ async def retry_async(
             last_exception = e
 
             if attempt == max_attempts:
-                # 最后一次尝试失败
                 logger.error(
                     f"函数 {func.__name__} 在 {max_attempts} 次尝试后失败"
                 )
                 raise
 
-            # 计算等待时间（指数退避）
             wait_time = min(min_wait * (2 ** (attempt - 1)), max_wait)
 
-            # 检查是否是 RetryableError 且有指定的重试时间
             if isinstance(e, RetryableError) and e.retry_after is not None:
                 wait_time = e.retry_after
 

@@ -75,14 +75,7 @@ def classify_error(error: Exception) -> ErrorContext:
     """分类错误
 
     根据错误类型和内容，确定错误类别、严重程度和处理策略。
-
-    Args:
-        error: 异常对象
-
-    Returns:
-        ErrorContext: 错误上下文
     """
-    # 速率限制错误
     if isinstance(error, RateLimitError):
         return ErrorContext(
             error=error,
@@ -92,7 +85,6 @@ def classify_error(error: Exception) -> ErrorContext:
             user_message="请求过于频繁，请稍后重试",
         )
 
-    # 超时错误
     if isinstance(error, APITimeoutError):
         return ErrorContext(
             error=error,
@@ -102,7 +94,6 @@ def classify_error(error: Exception) -> ErrorContext:
             user_message="请求超时，请稍后重试",
         )
 
-    # 连接错误
     if isinstance(error, APIConnectionError):
         return ErrorContext(
             error=error,
@@ -112,7 +103,6 @@ def classify_error(error: Exception) -> ErrorContext:
             user_message="网络连接失败，请检查网络后重试",
         )
 
-    # 验证错误
     if isinstance(error, ValidationError):
         return ErrorContext(
             error=error,
@@ -122,11 +112,9 @@ def classify_error(error: Exception) -> ErrorContext:
             user_message="输入数据格式不正确",
         )
 
-    # 检查错误消息中的关键词
     error_msg = str(error).lower()
     error_type = type(error).__name__
 
-    # 认证错误
     if "auth" in error_msg or "unauthorized" in error_msg or error_type == "AuthenticationError":
         return ErrorContext(
             error=error,
@@ -136,7 +124,6 @@ def classify_error(error: Exception) -> ErrorContext:
             user_message="认证失败，请检查密钥配置",
         )
 
-    # 权限错误
     if "permission" in error_msg or "forbidden" in error_msg:
         return ErrorContext(
             error=error,
@@ -146,7 +133,6 @@ def classify_error(error: Exception) -> ErrorContext:
             user_message="权限不足",
         )
 
-    # 工具执行错误
     if "tool" in error_msg or error_type.endswith("ToolError"):
         return ErrorContext(
             error=error,
@@ -156,7 +142,6 @@ def classify_error(error: Exception) -> ErrorContext:
             user_message="工具执行失败，请稍后重试",
         )
 
-    # 默认未知错误
     return ErrorContext(
         error=error,
         category=ErrorCategory.UNKNOWN,
@@ -170,36 +155,18 @@ def get_user_friendly_message(error: Exception, context: ErrorContext | None = N
     """获取用户友好的错误消息
 
     生产环境不暴露敏感信息，开发环境显示详细信息。
-
-    Args:
-        error: 异常对象
-        context: 错误上下文（可选）
-
-    Returns:
-        用户友好的错误消息
     """
     if context is None:
         context = classify_error(error)
 
-    # 生产环境使用预定义消息
     if settings.is_production:
         return context.user_message or "操作失败，请稍后重试"
 
-    # 开发环境显示详细信息
     return f"{context.user_message or '操作失败'}: [{context.error_type}] {context.error_message}"
 
 
 def handle_tool_error(error: Exception) -> str:
-    """处理工具执行错误
-
-    根据环境返回适当的错误消息。
-
-    Args:
-        error: 工具执行异常
-
-    Returns:
-        错误消息
-    """
+    """处理工具执行错误"""
     context = classify_error(error)
 
     logger.warning(
@@ -211,10 +178,7 @@ def handle_tool_error(error: Exception) -> str:
 
 
 class RetryStrategy:
-    """重试策略
-
-    根据错误类别决定是否重试以及重试间隔。
-    """
+    """重试策略"""
 
     def __init__(
         self,

@@ -35,23 +35,23 @@ class MultiAgentState(ChatState):
     整合了 SupervisorState 和 MultiAgentState 的所有字段。
 
     Attributes:
-        # ========== 路由相关 ==========
+        # 路由相关
         next_agent: 下一个要调用的 Agent ID
         routing_reasoning: 路由决策的推理过程
 
-        # ========== Agent 输出 ==========
+        # Agent 输出
         agent_outputs: 各 Agent 的执行结果 {agent_id: output}
 
-        # ========== 调用链追踪 ==========
+        # 调用链追踪
         current_agent_role: 当前 Agent 角色（supervisor, worker, etc.）
         parent_execution_id: 父执行记录 ID（用于调用链追踪）
         current_execution_id: 当前执行记录 ID
 
-        # ========== 迭代控制 ==========
+        # 迭代控制
         task_completed: 任务是否完成
         agent_history: 已调用的 Agent 列表
 
-        # ========== 当前迭代信息 ==========
+        # 当前迭代信息
         current_agent: 当前正在执行的 Agent ID（与 next_agent 配合使用）
 
     Examples:
@@ -75,23 +75,23 @@ class MultiAgentState(ChatState):
         ```
     """
 
-    # ========== 路由相关 ==========
+    # 路由相关
     next_agent: str | None
     routing_reasoning: str | None
 
-    # ========== Agent 输出 ==========
+    # Agent 输出
     agent_outputs: dict[str, Any]
 
-    # ========== 调用链追踪 ==========
+    # 调用链追踪
     current_agent_role: str | None  # supervisor, worker, router, etc.
     parent_execution_id: UUID | None
     current_execution_id: UUID | None
 
-    # ========== 迭代控制 ==========
+    # 迭代控制
     task_completed: bool
     agent_history: list[str]
 
-    # ========== 当前迭代信息 ==========
+    # 当前迭代信息
     current_agent: str | None
 
 

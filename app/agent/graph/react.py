@@ -1,381 +1,50 @@
-"""ReAct Agent 模块
+"""ReAct Agent 模块（DeerFlow 风格）
 
 基于 LangGraph 的 create_react_agent 提供快速开发选项。
 
 ReAct (Reasoning + Acting) 模式是一种经典的 Agent 模式，
 LLM 通过推理决定采取什么行动，然后执行行动并观察结果。
+
+DeerFlow 设计原则：
+- 所有 Agent 都是 CompiledStateGraph
+- 不需要额外的类包装
+- 使用 LangGraph 官方的 create_react_agent
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from typing import Any
 
-from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
-from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent as langgraph_create_react_agent
-from langgraph.types import RunnableConfig
 
-from app.agent.base import BaseAgent
-from app.llm import LLMService, get_llm_service
+from app.agent.config import get_llm_by_type
+from app.agent.prompts.template import render_prompt
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-# PostgreSQL 检查点保存器（可选）
-try:
-    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-    _postgres_available = True
-except ImportError:
-    AsyncPostgresSaver = None  # type: ignore
-    _postgres_available = False
-
-# PostgreSQL 连接池（可选）
-try:
-    from psycopg_pool import AsyncConnectionPool
-
-    _psycopg_pool_available = True
-except (ImportError, OSError):
-    AsyncConnectionPool = None  # type: ignore
-    _psycopg_pool_available = False
-
-# 延迟导入配置（需要避免循环依赖和初始化顺序问题）
-# noqa: E402 - 必须在可选依赖检查之后导入
-from app.config.settings import get_settings  # noqa: E402
-
-settings = get_settings()
-
-
-class ReactAgent(BaseAgent):
-    """ReAct Agent 实现（继承 BaseAgent）
-
-    使用 LangGraph 内置的 create_react_agent。
-
-    优点:
-        - 开箱即用的 ReAct 模式
-        - 自动处理工具调用循环
-        - 更少的代码
-        - 统一的 BaseAgent 接口
-
-    适用场景:
-        - 需要工具调用的 Agent
-        - 快速原型开发
-        - 简单的 Agent 应用
-
-    示例:
-        ```python
-        # 基础使用
-        agent = ReactAgent(tools=[my_tool])
-        response = await agent.get_response("你好", session_id="session-123")
-
-        # 使用异步上下文管理器（推荐）
-        async with ReactAgent(tools=[my_tool]) as agent:
-            response = await agent.get_response("你好", session_id="session-123")
-        ```
-    """
-
-    # 类级别的连接池缓存（避免重复创建）
-    _shared_connection_pool: AsyncConnectionPool | None = None
-    _pool_ref_count: int = 0
-
-    def __init__(
-        self,
-        llm_service: LLMService | None = None,
-        tools: list[BaseTool] | None = None,
-        system_prompt: str | None = None,
-        checkpointer: BaseCheckpointSaver | None = None,
-    ) -> None:
-        """初始化 ReAct Agent
-
-        Args:
-            llm_service: LLM 服务实例
-            tools: 工具列表
-            system_prompt: 系统提示词
-            checkpointer: 检查点保存器（如果提供，不会自动创建 PostgreSQL checkpointer）
-        """
-        self._llm_service = llm_service or get_llm_service()
-        self._tools = tools or []
-        self._system_prompt = system_prompt or self._default_system_prompt()
-        self._checkpointer = checkpointer
-        self._graph: CompiledStateGraph | None = None
-        self._owns_pool: bool = False  # 是否拥有连接池的所有权
-
-        logger.info(
-            "react_agent_initialized",
-            model=self._llm_service.current_model,
-            tool_count=len(self._tools),
-            has_checkpointer=checkpointer is not None,
-        )
-
-    def _default_system_prompt(self) -> str:
-        """默认系统提示词"""
-        return """你是一个有用的 AI 助手，可以帮助用户解答问题和完成各种任务。
-
-你可以使用提供的工具来获取信息或执行操作。请始终以友好、专业的方式回应用户。
-
-如果用户的问题超出了你的知识范围或工具能力，请诚实地告知用户。"""
-
-    async def _get_postgres_checkpointer(self) -> AsyncPostgresSaver | None:
-        """获取 PostgreSQL 检查点保存器
-
-        使用类级别的共享连接池，避免重复创建。
-
-        Returns:
-            AsyncPostgresSaver 实例或 None
-        """
-        if not _postgres_available or not _psycopg_pool_available:
-            logger.debug("postgres_checkpointer_not_available")
-            return None
-
-        if self._checkpointer is not None:
-            return self._checkpointer
-
-        try:
-            # 使用类级别的共享连接池
-            if ReactAgent._shared_connection_pool is None:
-                # 从 database_url 解析连接信息
-                db_url = settings.database_url
-                if db_url.startswith("postgresql+asyncpg://"):
-                    db_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
-
-                ReactAgent._shared_connection_pool = AsyncConnectionPool(
-                    conninfo=db_url,
-                    open=False,
-                    max_size=settings.database_pool_size,
-                    kwargs={"autocommit": True},
-                )
-                await ReactAgent._shared_connection_pool.open()
-                logger.info("postgres_shared_connection_pool_created")
-
-            ReactAgent._pool_ref_count += 1
-            self._owns_pool = True
-
-            checkpointer = AsyncPostgresSaver(ReactAgent._shared_connection_pool)
-            await checkpointer.setup()
-            logger.info(
-                "postgres_checkpointer_initialized", pool_ref_count=ReactAgent._pool_ref_count
-            )
-            return checkpointer
-
-        except Exception as e:
-            logger.warning("postgres_checkpointer_init_failed", error=str(e))
-            return None
-
-    async def _ensure_graph(self) -> CompiledStateGraph:
-        """确保图已创建
-
-        Returns:
-            CompiledStateGraph 实例
-        """
-        if self._graph is None:
-            llm = self._llm_service.get_llm()
-            if llm is None:
-                raise RuntimeError("LLM 未初始化")
-
-            self._graph = langgraph_create_react_agent(
-                model=llm,
-                tools=self._tools,
-                prompt=self._system_prompt,
-            )
-            logger.info("react_graph_created")
-
-        return self._graph
-
-    async def get_response(
-        self,
-        message: str,
-        session_id: str,
-        user_id: str | None = None,
-        tenant_id: int | None = None,
-    ) -> list[BaseMessage]:
-        """获取 Agent 响应
-
-        Args:
-            message: 用户消息
-            session_id: 会话 ID（用于状态持久化）
-            user_id: 用户 ID（未使用，保持接口兼容）
-            tenant_id: 租户 ID（未使用，保持接口兼容）
-
-        Returns:
-            响应消息列表
-        """
-        from langchain_core.messages import HumanMessage
-
-        graph = await self._ensure_graph()
-
-        # 准备输入
-        input_data = {"messages": [HumanMessage(content=message)]}
-
-        # 准备配置
-        config = RunnableConfig(
-            configurable={"thread_id": session_id},
-            metadata={
-                "user_id": user_id,
-                "session_id": session_id,
-            },
-        )
-
-        # 调用图
-        logger.info("react_agent_invoke_start", session_id=session_id, user_id=user_id)
-        result = await graph.ainvoke(input_data, config)
-        logger.info("react_agent_invoke_complete", session_id=session_id)
-
-        return result["messages"]
-
-    async def astream(
-        self,
-        message: str,
-        session_id: str,
-        user_id: str | None = None,
-        tenant_id: int | None = None,
-    ) -> AsyncIterator[BaseMessage]:
-        """流式获取 Agent 响应
-
-        Args:
-            message: 用户消息
-            session_id: 会话 ID
-            user_id: 用户 ID（未使用，保持接口兼容）
-            tenant_id: 租户 ID（未使用，保持接口兼容）
-
-        Yields:
-            消息（逐个产出）
-        """
-        from langchain_core.messages import HumanMessage
-
-        graph = await self._ensure_graph()
-
-        # 准备输入
-        input_data = {"messages": [HumanMessage(content=message)]}
-
-        # 准备配置
-        config = RunnableConfig(
-            configurable={"thread_id": session_id},
-            metadata={
-                "user_id": user_id,
-                "session_id": session_id,
-            },
-        )
-
-        # 流式调用
-        logger.info("react_agent_stream_start", session_id=session_id)
-        async for chunk in graph.astream(input_data, config, stream_mode="messages"):
-            if isinstance(chunk, BaseMessage):
-                yield chunk
-        logger.info("react_agent_stream_complete", session_id=session_id)
-
-    async def get_session_history(
-        self,
-        session_id: str,
-    ) -> list[BaseMessage]:
-        """获取会话历史（实现 BaseAgent 接口）
-
-        Args:
-            session_id: 会话 ID
-
-        Returns:
-            历史消息列表
-        """
-        graph = await self._ensure_graph()
-
-        config = RunnableConfig(
-            configurable={"thread_id": session_id},
-        )
-
-        state = await graph.aget_state(config)
-
-        if state and state.values:
-            return state.values.get("messages", [])
-
-        return []
-
-    async def clear_session(
-        self,
-        session_id: str,
-    ) -> None:
-        """清除会话历史（实现 BaseAgent 接口）
-
-        Args:
-            session_id: 会话 ID
-        """
-        try:
-            if ReactAgent._shared_connection_pool:
-                async with ReactAgent._shared_connection_pool.connection() as conn:
-                    # 删除检查点数据
-                    await conn.execute(
-                        "DELETE FROM checkpoints WHERE thread_id = %s",
-                        (session_id,),
-                    )
-                    await conn.execute(
-                        "DELETE FROM checkpoint_blobs WHERE thread_id = %s",
-                        (session_id,),
-                    )
-                    logger.info("chat_history_cleared", session_id=session_id)
-        except Exception as e:
-            logger.error("clear_chat_history_failed", session_id=session_id, error=str(e))
-            raise
-
-    async def close(self) -> None:
-        """关闭 Agent，释放资源
-
-        使用共享连接池时，只有当所有实例都关闭后才真正关闭连接池。
-        """
-        if self._owns_pool and ReactAgent._shared_connection_pool is not None:
-            ReactAgent._pool_ref_count -= 1
-            logger.info("react_agent_pool_ref_decremented", ref_count=ReactAgent._pool_ref_count)
-
-            # 只有当没有实例引用时才关闭连接池
-            if ReactAgent._pool_ref_count <= 0:
-                await ReactAgent._shared_connection_pool.close()
-                ReactAgent._shared_connection_pool = None
-                ReactAgent._pool_ref_count = 0
-                logger.info("postgres_shared_connection_pool_closed")
-
-            self._owns_pool = False
-
-        logger.info("react_agent_closed")
-
-    @classmethod
-    async def shutdown_shared_pool(cls) -> None:
-        """关闭类级别的共享连接池
-
-        通常在应用关闭时调用。
-
-        Example:
-            ```python
-            await ReactAgent.shutdown_shared_pool()
-            ```
-        """
-        if cls._shared_connection_pool is not None:
-            await cls._shared_connection_pool.close()
-            cls._shared_connection_pool = None
-            cls._pool_ref_count = 0
-            logger.info("postgres_shared_connection_pool_shutdown")
-
-
-# ============== 便捷函数 ==============
-
-
 def create_react_agent(
-    llm_service: LLMService | None = None,
+    agent_name: str = "react_agent",
+    agent_type: str = "basic",
     tools: list[BaseTool] | None = None,
-    system_prompt: str | None = None,
-    checkpointer: BaseCheckpointSaver | None = None,
-) -> ReactAgent:
-    """创建 ReAct Agent 实例
+    prompt_template: str | None = None,
+    **kwargs: Any,
+) -> Any:
+    """创建 ReAct Agent（返回 CompiledStateGraph）
 
     这是一个快速创建 Agent 的便捷函数，适合简单场景。
 
     Args:
-        llm_service: LLM 服务实例
+        agent_name: Agent 名称
+        agent_type: Agent 类型（决定 LLM 类型）
         tools: 工具列表
-        system_prompt: 系统提示词
-        checkpointer: 检查点保存器
+        prompt_template: 提示词模板名称
+        **kwargs: 其他参数（传递给 langgraph_create_react_agent）
 
     Returns:
-        ReactAgent 实例
+        CompiledStateGraph 实例
 
     Examples:
         ```python
@@ -388,25 +57,59 @@ def create_react_agent(
             return f"{location} 今天晴天，25°C"
 
         agent = create_react_agent(
+            agent_name="weather_agent",
             tools=[get_weather],
-            system_prompt="你是一个天气助手",
+            prompt_template="chat",
         )
 
-        response = await agent.get_response(
-            message="北京今天天气怎么样？",
-            session_id="session-123",
+        # 调用 agent
+        result = await agent.ainvoke(
+            {"messages": [("user", "北京今天天气怎么样？")]},
+            {"configurable": {"thread_id": "session-123"}},
         )
         ```
     """
-    return ReactAgent(
-        llm_service=llm_service,
-        tools=tools,
-        system_prompt=system_prompt,
-        checkpointer=checkpointer,
+    tools = tools or []
+
+    logger.debug(
+        "creating_react_agent",
+        agent_name=agent_name,
+        agent_type=agent_type,
+        tools_count=len(tools),
     )
 
+    # 获取 LLM
+    llm = get_llm_by_type(agent_type)
 
-__all__ = [
-    "ReactAgent",
-    "create_react_agent",
-]
+    # 构建 prompt 函数
+    if prompt_template:
+        # 使用 Jinja2 模板
+        def prompt_fn(state: dict) -> str:
+            locale = state.get("locale", "zh-CN")
+            return render_prompt(
+                prompt_template,
+                locale=locale,
+                agent_name=agent_name,
+                tools=tools,
+                **state,
+            )
+    else:
+        # 使用默认提示词
+        def prompt_fn(state: dict) -> str:
+            return f"你是 {agent_name}。"
+
+    # 创建 ReAct Agent
+    agent = langgraph_create_react_agent(
+        name=agent_name,
+        model=llm,
+        tools=tools,
+        prompt=prompt_fn,
+        **kwargs,
+    )
+
+    logger.info("react_agent_created", agent_name=agent_name)
+
+    return agent
+
+
+__all__ = ["create_react_agent"]
