@@ -35,9 +35,9 @@ from langchain_core.messages import BaseMessage
 from langchain_core.outputs import LLMResult
 
 from app.config.settings import get_settings
-from app.observability.audit import AuditEventType, record_agent_event, record_tool_call
-from app.observability.logging import get_logger, bind_context
 from app.llm import resolve_provider
+from app.observability.audit import AuditEventType, record_agent_event, record_tool_call
+from app.observability.logging import bind_context, get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -115,7 +115,6 @@ class KikiCallbackHandler(BaseCallbackHandler):
         # Langfuse 客户端（延迟初始化）
         self._langfuse: Any | None = None
 
-        # 绑定日志上下文
         bind_context(session_id=session_id, user_id=user_id)
 
         logger.debug(

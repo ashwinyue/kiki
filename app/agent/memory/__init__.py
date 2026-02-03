@@ -1,17 +1,13 @@
 """Memory 模块
 
-提供短期、长期和窗口记忆管理功能。
+提供短期和长期记忆管理功能。
+
+窗口记忆功能已移至 app.agent.context.sliding_window。
 
 使用示例:
 ```python
-from app.agent.memory import MemoryManager, create_pre_model_hook
-from app.llm.embeddings import DashScopeEmbeddings
-
-# 使用 DashScope Embeddings 创建长期记忆
-embeddings = DashScopeEmbeddings(
-    api_key="your-dashscope-api-key",
-    dimensions=1024,
-)
+from app.agent.memory import MemoryManager
+from app.agent.context import SlidingContextWindow
 
 # 创建 Memory Manager
 manager = MemoryManager(session_id="session-123")
@@ -31,8 +27,8 @@ await manager.add_long_term_memory(
 # 检索相关记忆
 memories = await manager.search_long_term("用户偏好")
 
-# 使用窗口记忆（Token 限制）
-hook = create_pre_model_hook(max_tokens=384)
+# 使用滑动窗口（替代窗口记忆）
+window = SlidingContextWindow(window_size=10, max_tokens=4000)
 ```
 """
 
@@ -40,15 +36,6 @@ from app.agent.memory.base import BaseLongTermMemory, BaseMemory
 from app.agent.memory.long_term import LongTermMemory
 from app.agent.memory.manager import MemoryManager
 from app.agent.memory.short_term import ShortTermMemory
-from app.agent.memory.window import (
-    TrimStrategy,
-    TokenCounterType,
-    WindowMemoryManager,
-    create_chat_hook,
-    create_pre_model_hook,
-    get_window_memory_manager,
-    trim_state_messages,
-)
 
 __all__ = [
     # 基础类
@@ -58,12 +45,4 @@ __all__ = [
     "MemoryManager",
     "ShortTermMemory",
     "LongTermMemory",
-    # 窗口记忆
-    "TrimStrategy",
-    "TokenCounterType",
-    "WindowMemoryManager",
-    "create_pre_model_hook",
-    "create_chat_hook",
-    "get_window_memory_manager",
-    "trim_state_messages",
 ]

@@ -8,6 +8,7 @@
 - 支持客户端重连到正在进行的流
 - 缓存流式事件供重连获取
 - 超时处理和清理
+- 流式消息持久化（集成 ChatStreamManager）
 """
 
 from __future__ import annotations
@@ -20,10 +21,27 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+# 重试装饰器：用于 Redis 操作
+_redis_retry = retry(
+    retry=retry_if_exception_type((RedisConnectionError, RedisTimeoutError)),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    reraise=True,
+)
 
 # Redis 键前缀
 _STREAM_BUFFER_PREFIX = "kiki:stream:buffer:"
@@ -33,6 +51,8 @@ _STREAM_META_PREFIX = "kiki:stream:meta:"
 _DEFAULT_BUFFER_SIZE = 1000  # 缓存最近 1000 个事件
 _DEFAULT_EVENT_TTL = 300  # 事件缓存 5 分钟
 _DEFAULT_STREAM_TIMEOUT = 600  # 流超时 10 分钟
+_DEFAULT_BATCH_SIZE = 20  # 批量写入阈值
+_DEFAULT_BATCH_INTERVAL = 0.1  # 批量写入间隔（秒）
 
 
 class StreamEvent(BaseModel):
@@ -107,6 +127,8 @@ class StreamContinuationService:
 
     使用 Redis 存储流事件和元数据，支持分布式部署。
 
+    集成 ChatStreamManager 用于流式消息的持久化。
+
     Examples:
         ```python
         service = StreamContinuationService()
@@ -134,6 +156,9 @@ class StreamContinuationService:
         buffer_size: int = _DEFAULT_BUFFER_SIZE,
         event_ttl: int = _DEFAULT_EVENT_TTL,
         stream_timeout: int = _DEFAULT_STREAM_TIMEOUT,
+        batch_size: int = _DEFAULT_BATCH_SIZE,
+        batch_interval: float = _DEFAULT_BATCH_INTERVAL,
+        enable_checkpoint: bool = True,
     ) -> None:
         """初始化流继续服务
 
@@ -141,18 +166,39 @@ class StreamContinuationService:
             buffer_size: 内存缓冲区大小
             event_ttl: 事件过期时间（秒）
             stream_timeout: 流超时时间（秒）
+            batch_size: 批量写入阈值
+            batch_interval: 批量写入间隔（秒）
+            enable_checkpoint: 是否启用 ChatStreamManager 持久化
         """
         from app.infra.redis import get_cache
 
         self._buffer_size = buffer_size
         self._event_ttl = event_ttl
         self._stream_timeout = stream_timeout
+        self._batch_size = batch_size
+        self._batch_interval = batch_interval
+        self._enable_checkpoint = enable_checkpoint
         self._buffer_cache = get_cache(key_prefix=_STREAM_BUFFER_PREFIX)
         self._meta_cache = get_cache(key_prefix=_STREAM_META_PREFIX)
 
         # 内存中的活跃流缓冲区（用于快速访问）
         self._active_streams: dict[str, deque[StreamEvent]] = {}
         self._stream_tasks: dict[str, asyncio.Task] = {}
+
+        # 批量写入缓冲区
+        self._batch_buffers: dict[str, list[StreamEvent]] = {}
+        self._batch_flush_tasks: dict[str, asyncio.Task] = {}
+
+        # ChatStreamManager（用于持久化）
+        self._chat_stream_manager = None
+
+    async def _get_chat_stream_manager(self):
+        """获取 ChatStreamManager 实例（延迟加载）"""
+        if self._enable_checkpoint and self._chat_stream_manager is None:
+            from app.agent.graph.chat_stream import get_chat_stream_manager
+
+            self._chat_stream_manager = await get_chat_stream_manager()
+        return self._chat_stream_manager
 
     def _make_buffer_key(self, session_id: str) -> str:
         """生成缓冲区键"""
@@ -161,6 +207,66 @@ class StreamContinuationService:
     def _make_meta_key(self, session_id: str) -> str:
         """生成元数据键"""
         return f"meta:{session_id}"
+
+    @_redis_retry
+    async def _redis_set_meta(
+        self,
+        key: str,
+        value: str,
+        ttl: int,
+    ) -> bool:
+        """设置元数据（带重试）"""
+        return await self._meta_cache.set(key, value, ttl=ttl)
+
+    @_redis_retry
+    async def _redis_get_meta(self, key: str) -> str | None:
+        """获取元数据（带重试）"""
+        return await self._meta_cache.get(key)
+
+    @_redis_retry
+    async def _redis_lpush_events(
+        self,
+        buffer_key: str,
+        events: list[str],
+    ) -> None:
+        """批量推送事件到 Redis List（带重试）"""
+        from app.infra.redis import get_redis
+
+        client = await get_redis()
+        pipe = client.pipeline()
+        for event_json in reversed(events):
+            pipe.lpush(buffer_key, event_json)
+        await pipe.execute()
+
+    @_redis_retry
+    async def _redis_trim_and_expire(
+        self,
+        buffer_key: str,
+        buffer_size: int,
+        ttl: int,
+    ) -> None:
+        """裁剪列表并设置过期时间（带重试）"""
+        from app.infra.redis import get_redis
+
+        client = await get_redis()
+        await client.ltrim(buffer_key, 0, buffer_size - 1)
+        await client.expire(buffer_key, ttl)
+
+    @_redis_retry
+    async def _redis_lrange_events(self, buffer_key: str) -> list[str]:
+        """获取所有事件（带重试）"""
+        from app.infra.redis import get_redis
+
+        client = await get_redis()
+        return await client.lrange(buffer_key, 0, -1)
+
+    @_redis_retry
+    async def _redis_delete_keys(self, *keys: str) -> int:
+        """删除多个键（带重试）"""
+        from app.infra.redis import get_redis
+
+        client = await get_redis()
+        return await client.delete(*keys)
 
     async def register_stream(
         self,
@@ -190,10 +296,10 @@ class StreamContinuationService:
 
             # 保存到 Redis
             meta_key = self._make_meta_key(session_id)
-            success = await self._meta_cache.set(
+            success = await self._redis_set_meta(
                 meta_key,
                 metadata.model_dump_json(),
-                ttl=self._stream_timeout,
+                self._stream_timeout,
             )
 
             if success:
@@ -227,7 +333,7 @@ class StreamContinuationService:
         """
         try:
             meta_key = self._make_meta_key(session_id)
-            value = await self._meta_cache.get(meta_key)
+            value = await self._redis_get_meta(meta_key)
 
             if value is None:
                 return False
@@ -262,20 +368,19 @@ class StreamContinuationService:
             if session_id in self._active_streams:
                 self._active_streams[session_id].append(event)
 
-            # 更新 Redis 缓冲区
-            buffer_key = self._make_buffer_key(session_id)
-            event_json = event.model_dump_json()
+            # 添加到批量缓冲区
+            if session_id not in self._batch_buffers:
+                self._batch_buffers[session_id] = []
+                # 启动定时刷新任务
+                self._batch_flush_tasks[session_id] = asyncio.create_task(
+                    self._auto_flush_buffer(session_id)
+                )
 
-            # 使用 Redis List 存储事件（最多保留 buffer_size 个）
-            from app.infra.redis import get_redis
+            self._batch_buffers[session_id].append(event)
 
-            client = await get_redis()
-            await client.lpush(buffer_key, event_json)
-            await client.ltrim(buffer_key, 0, self._buffer_size - 1)
-            await client.expire(buffer_key, self._event_ttl)
-
-            # 更新元数据
-            await self._update_metadata(session_id)
+            # 达到批量阈值，立即刷新
+            if len(self._batch_buffers[session_id]) >= self._batch_size:
+                await self._flush_batch_buffer(session_id)
 
             return True
 
@@ -304,13 +409,10 @@ class StreamContinuationService:
             StreamEvent 实例
         """
         try:
-            from app.infra.redis import get_redis
-
-            client = await get_redis()
             buffer_key = self._make_buffer_key(session_id)
 
-            # 从 Redis 获取事件（注意：lpush 后需要 lrange 获取）
-            events_json = await client.lrange(buffer_key, 0, -1)
+            # 从 Redis 获取事件（使用带重试的方法）
+            events_json = await self._redis_lrange_events(buffer_key)
 
             # 反转列表（因为 lpush 导致顺序相反）
             events_json.reverse()
@@ -410,6 +512,9 @@ class StreamContinuationService:
             是否标记成功
         """
         try:
+            # 强制刷新批量缓冲区
+            await self.force_flush(session_id)
+
             # 更新元数据
             metadata = await self.get_metadata(session_id)
             if metadata:
@@ -430,6 +535,34 @@ class StreamContinuationService:
                 metadata=final_metadata or {},
             )
             await self.add_event(session_id, done_event)
+
+            # 确保完成事件也被刷新
+            await self.force_flush(session_id)
+
+            # ======================
+            # 集成 ChatStreamManager 持久化
+            # ======================
+            chat_manager = await self._get_chat_stream_manager()
+            if chat_manager:
+                # 收集所有消息内容
+                messages = []
+                async for event in self.get_events(session_id):
+                    if event.event_type == "token" and event.content:
+                        messages.append(event.content)
+
+                # 持久化完整消息
+                combined_message = "".join(messages)
+                await chat_manager.process_stream_message(
+                    thread_id=session_id,
+                    message=combined_message,
+                    finish_reason="stop",
+                )
+
+                logger.info(
+                    "stream_persisted_to_checkpoint",
+                    session_id=session_id,
+                    message_length=len(combined_message),
+                )
 
             # 清理内存缓冲区（延迟清理，允许重连）
             if session_id in self._stream_tasks:
@@ -470,6 +603,9 @@ class StreamContinuationService:
             是否中止成功
         """
         try:
+            # 强制刷新批量缓冲区
+            await self.force_flush(session_id)
+
             # 添加错误事件
             error_event = StreamEvent(
                 event_type="error",
@@ -477,6 +613,32 @@ class StreamContinuationService:
                 metadata={"aborted": True},
             )
             await self.add_event(session_id, error_event)
+
+            # ======================
+            # 集成 ChatStreamManager 持久化（中断状态）
+            # ======================
+            chat_manager = await self._get_chat_stream_manager()
+            if chat_manager:
+                # 收集所有消息内容
+                messages = []
+                async for event in self.get_events(session_id):
+                    if event.event_type == "token" and event.content:
+                        messages.append(event.content)
+
+                # 持久化消息（中断状态）
+                combined_message = "".join(messages)
+                await chat_manager.process_stream_message(
+                    thread_id=session_id,
+                    message=combined_message,
+                    finish_reason="interrupt",
+                )
+
+                logger.info(
+                    "stream_aborted_persisted_to_checkpoint",
+                    session_id=session_id,
+                    reason=reason,
+                    message_length=len(combined_message),
+                )
 
             # 标记完成
             return await self.complete_stream(
@@ -502,15 +664,14 @@ class StreamContinuationService:
             是否清理成功
         """
         try:
-            from app.infra.redis import get_redis
+            # 强制刷新批量缓冲区
+            await self.force_flush(session_id)
 
-            client = await get_redis()
-
-            # 删除缓冲区和元数据
+            # 删除缓冲区和元数据（使用带重试的方法）
             buffer_key = self._make_buffer_key(session_id)
             meta_key = self._make_meta_key(session_id)
 
-            await client.delete(buffer_key, meta_key)
+            await self._redis_delete_keys(buffer_key, meta_key)
 
             # 清理内存
             if session_id in self._active_streams:
@@ -518,6 +679,10 @@ class StreamContinuationService:
             if session_id in self._stream_tasks:
                 self._stream_tasks[session_id].cancel()
                 del self._stream_tasks[session_id]
+
+            # 清理批量缓冲区
+            if session_id in self._batch_buffers:
+                del self._batch_buffers[session_id]
 
             logger.info("stream_cleaned", session_id=session_id)
             return True
@@ -529,6 +694,78 @@ class StreamContinuationService:
                 error=str(e),
             )
             return False
+
+    async def _auto_flush_buffer(self, session_id: str) -> None:
+        """自动刷新批量缓冲区（定时任务）
+
+        Args:
+            session_id: 会话 ID
+        """
+        try:
+            await asyncio.sleep(self._batch_interval)
+            await self._flush_batch_buffer(session_id)
+        except asyncio.CancelledError:
+            # 任务被取消，执行最后的刷新
+            await self._flush_batch_buffer(session_id)
+        except Exception as e:
+            logger.error(
+                "auto_flush_failed",
+                session_id=session_id,
+                error=str(e),
+            )
+
+    async def _flush_batch_buffer(self, session_id: str) -> bool:
+        """刷新批量缓冲区到 Redis
+
+        Args:
+            session_id: 会话 ID
+
+        Returns:
+            是否刷新成功
+        """
+        try:
+            if session_id not in self._batch_buffers or not self._batch_buffers[session_id]:
+                return True
+
+            events = self._batch_buffers[session_id]
+            buffer_key = self._make_buffer_key(session_id)
+
+            # 使用带重试的批量写入
+            events_json = [event.model_dump_json() for event in events]
+            await self._redis_lpush_events(buffer_key, events_json)
+            await self._redis_trim_and_expire(buffer_key, self._buffer_size, self._event_ttl)
+
+            # 清空批量缓冲区
+            self._batch_buffers[session_id].clear()
+
+            # 更新元数据（增加事件计数）
+            await self._update_metadata(session_id)
+
+            return True
+
+        except Exception as e:
+            logger.error(
+                "flush_batch_buffer_failed",
+                session_id=session_id,
+                error=str(e),
+            )
+            return False
+
+    async def force_flush(self, session_id: str) -> bool:
+        """强制刷新指定会话的批量缓冲区
+
+        Args:
+            session_id: 会话 ID
+
+        Returns:
+            是否刷新成功
+        """
+        # 取消定时刷新任务
+        if session_id in self._batch_flush_tasks:
+            self._batch_flush_tasks[session_id].cancel()
+            del self._batch_flush_tasks[session_id]
+
+        return await self._flush_batch_buffer(session_id)
 
     async def _update_metadata(self, session_id: str) -> None:
         """更新元数据（增加事件计数）"""

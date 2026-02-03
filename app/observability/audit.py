@@ -27,7 +27,6 @@ logs = await get_audit_logs(user_id="user-123", limit=100)
 
 import asyncio
 import json
-import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -335,7 +334,7 @@ class AuditLogger:
         """
         try:
             await asyncio.wait_for(self._queue.put(event), timeout=1.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("audit_queue_full")
 
         # 控制台输出实时日志
@@ -361,7 +360,7 @@ class AuditLogger:
                 event = await asyncio.wait_for(self._queue.get(), timeout=1.0)
                 await self._persist_event(event)
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break

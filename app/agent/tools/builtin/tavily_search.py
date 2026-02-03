@@ -17,12 +17,9 @@ results = await search_web_tavily("Python LangGraph tutorial")
 ```
 """
 
-import json
-import logging
 from typing import Any, Literal
 
 from langchain_core.tools import tool
-from pydantic import Field, field_validator
 
 from app.agent.tools.search_postprocessor import SearchResultPostProcessor
 from app.config.settings import get_settings
@@ -136,7 +133,7 @@ def _format_tavily_results(response: dict[str, Any], query: str) -> str:
     # 添加搜索结果
     results = response.get("results", [])
     if results:
-        parts.append(f"## 搜索结果\n")
+        parts.append("## 搜索结果\n")
         for i, result in enumerate(results, 1):
             title = result.get("title", "")
             url = result.get("url", "")
@@ -156,7 +153,7 @@ def _format_tavily_results(response: dict[str, Any], query: str) -> str:
     # 添加图像（如果有）
     images = response.get("images", [])
     if images:
-        parts.append(f"## 相关图像\n")
+        parts.append("## 相关图像\n")
         for i, image in enumerate(images[:5], 1):  # 最多显示 5 张
             url = image.get("url", "")
             description = image.get("description", "")

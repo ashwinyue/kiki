@@ -53,11 +53,9 @@ class LongTermMemory(BaseLongTermMemory):
         if self._embeddings is not None:
             return self._embeddings
 
-        # 优先使用自定义 embeddings
         if self._custom_embeddings is not None:
             self._embeddings = self._custom_embeddings
         else:
-            # 使用配置的提供商
             provider = self._embedding_provider or settings.embedding_provider
             self._embeddings = get_embeddings(provider=provider)
 
@@ -70,7 +68,6 @@ class LongTermMemory(BaseLongTermMemory):
 
         # 尝试使用 LangChain 的向量存储集成
         try:
-            # 检查配置的向量存储类型
             storage_type = getattr(settings, "vector_store_type", "memory")
 
             if storage_type == "pgvector":

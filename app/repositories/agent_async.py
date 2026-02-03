@@ -10,7 +10,6 @@ from uuid import uuid4
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import SQLModel
 
 from app.models.custom_agent import CustomAgent
 from app.observability.logging import get_logger
@@ -20,9 +19,6 @@ logger = get_logger(__name__)
 
 # 向后兼容别名
 Agent = CustomAgent
-
-
-# ============== 仓储 ==============
 
 
 class AgentRepositoryAsync(BaseRepository[Agent]):

@@ -14,10 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Optional
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -127,7 +125,7 @@ class RateLimitPolicy:
     rate: float
     burst_capacity: int
     tokens_per_request: float = 1.0
-    key_func: Optional[Callable[[Request], str]] = None
+    key_func: Callable[[Request], str] | None = None
     exempt_paths: set[str] = field(default_factory=set)
     ttl_seconds: int = 600
 
@@ -171,8 +169,8 @@ class TokenBucketRateLimiter(BaseHTTPMiddleware):
         rate_per_sec: float,
         burst_capacity: int,
         tokens_per_request: float = 1.0,
-        key_func: Optional[Callable[[Request], str]] = None,
-        exempt_paths: Optional[set[str]] = None,
+        key_func: Callable[[Request], str] | None = None,
+        exempt_paths: set[str] | None = None,
         ttl_seconds: int = 600,
         max_buckets: int = 10000,
     ):
@@ -387,8 +385,8 @@ class PathBasedRateLimiter(TokenBucketRateLimiter):
         self,
         app,
         policies: dict[str, RateLimitPolicy],
-        default_policy: Optional[RateLimitPolicy] = None,
-        key_func: Optional[Callable[[Request], str]] = None,
+        default_policy: RateLimitPolicy | None = None,
+        key_func: Callable[[Request], str] | None = None,
     ):
         """初始化基于路径的限流器
 

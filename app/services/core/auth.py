@@ -57,8 +57,6 @@ class AuthService:
             self._session_repo = SessionRepository(self.session)
         return self._session_repo
 
-    # ============== 用户注册 ==============
-
     async def register_user(self, data: RegisterRequest) -> UserWithTokenResponse:
         """注册新用户
 

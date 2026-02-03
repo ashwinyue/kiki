@@ -3,21 +3,17 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-
-from app.middleware import (
-    require_tenant,
-    TenantIdDep,
-)
-from app.models.database import Tenant, TenantCreate, TenantPublic, TenantUpdate
-from app.services.tenant import TenantService
-from app.infra.database import get_session
-from app.schemas.tenant import ApiKeyResponse, TenantListResponse, TenantItem, TenantSearchResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infra.database import get_session
+from app.middleware import (
+    require_tenant,
+)
+from app.models.database import TenantCreate, TenantPublic, TenantUpdate
+from app.schemas.tenant import ApiKeyResponse, TenantItem, TenantListResponse, TenantSearchResponse
+from app.services.tenant import TenantService
+
 router = APIRouter(prefix="/tenants", tags=["tenants"])
-
-
-# ============== 管理端点 ==============
 
 
 @router.post("", response_model=TenantPublic, status_code=status.HTTP_201_CREATED)

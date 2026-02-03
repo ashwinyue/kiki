@@ -5,12 +5,12 @@
 
 from typing import Any
 
-from sqlalchemy import desc, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.placeholder import Placeholder
 from app.observability.logging import get_logger
-from app.repositories.base import BaseRepository, PaginationParams, PaginatedResult
+from app.repositories.base import BaseRepository, PaginatedResult, PaginationParams
 
 logger = get_logger(__name__)
 

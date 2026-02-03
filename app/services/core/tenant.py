@@ -167,7 +167,6 @@ class TenantService:
         """
         from sqlalchemy import func
 
-        # 构建查询
         stmt = select(Tenant)
         count_stmt = select(func.count()).select_from(Tenant)
 

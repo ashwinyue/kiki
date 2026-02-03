@@ -3,12 +3,13 @@
 对齐 WeKnora99 表结构
 """
 
-from datetime import UTC, datetime
-from typing import Any
+from datetime import datetime
 
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Column, Field, SQLModel
+
+from app.models.timestamp import TimestampMixin
 
 
 class AuthTokenBase(SQLModel):
@@ -22,7 +23,7 @@ class AuthTokenBase(SQLModel):
     name: str | None = Field(default=None, max_length=100)
 
 
-class AuthToken(AuthTokenBase, table=True):
+class AuthToken(TimestampMixin, AuthTokenBase, table=True):
     """认证令牌表模型"""
 
     __tablename__ = "auth_tokens"
@@ -32,8 +33,6 @@ class AuthToken(AuthTokenBase, table=True):
         default=None, sa_column=Column(ARRAY(String), default=None)
     )
     last_used_at: datetime | None = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class AuthTokenCreate(SQLModel):

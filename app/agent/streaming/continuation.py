@@ -18,13 +18,13 @@ from typing import Any
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import RunnableConfig
 
-from app.observability.logging import get_logger
 from app.agent.streaming.service import (
     StreamEvent as StreamContinuationEvent,
 )
 from app.agent.streaming.service import (
     get_stream_continuation_service,
 )
+from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -216,14 +216,14 @@ class ContinuableStreamProcessor:
         self,
         input_data: dict[str, Any],
         config: RunnableConfig,
-        version: str = "v1",
+        version: str = "v2",
     ) -> AsyncIterator[StreamContinuationEvent]:
         """流式输出事件（可继续）
 
         Args:
             input_data: 输入数据
             config: 运行配置
-            version: LangGraph 事件版本
+            version: LangGraph 事件版本 (v1, v2, v2_patches)
 
         Yields:
             StreamContinuationEvent 实例

@@ -118,7 +118,7 @@ class StreamProcessor:
         self,
         input_data: dict[str, Any],
         config: RunnableConfig,
-        version: str = "v1",
+        version: str = "v2",
     ) -> AsyncIterator[StreamEvent]:
         """流式输出事件
 
@@ -131,7 +131,7 @@ class StreamProcessor:
         Args:
             input_data: 输入数据
             config: 运行配置
-            version: LangGraph 事件版本
+            version: LangGraph 事件版本 (v1, v2, v2_patches)
 
         Yields:
             StreamEvent 实例
@@ -296,6 +296,44 @@ class StreamProcessor:
 
         logger.info("stream_messages_tuple_complete")
 
+    async def stream_debug(
+        self,
+        input_data: dict[str, Any],
+        config: RunnableConfig,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """流式输出调试信息
+
+        使用 LangGraph 的 debug 流模式，返回完整的执行轨迹，
+        包括节点执行、状态更新、工具调用等详细信息。
+
+        Args:
+            input_data: 输入数据
+            config: 运行配置
+
+        Yields:
+            调试事件字典，包含：
+            - event: 事件类型
+            - node: 节点名称
+            - state: 状态快照
+            - metadata: 额外信息
+        """
+        logger.info("stream_debug_start")
+
+        try:
+            async for debug_event in self._graph.astream(
+                input_data,
+                config,
+                stream_mode="debug",
+            ):
+                if isinstance(debug_event, dict):
+                    yield debug_event
+
+        except Exception as e:
+            logger.error("stream_debug_error", error=str(e))
+            raise
+
+        logger.info("stream_debug_complete")
+
 
 async def stream_tokens_from_graph(
     graph: CompiledStateGraph,
@@ -329,7 +367,7 @@ async def stream_events_from_graph(
     graph: CompiledStateGraph,
     input_data: dict[str, Any],
     config: RunnableConfig,
-    version: str = "v1",
+    version: str = "v2",
 ) -> AsyncIterator[StreamEvent]:
     """便捷函数：从图中流式获取事件
 
@@ -337,7 +375,7 @@ async def stream_events_from_graph(
         graph: 编译后的 LangGraph
         input_data: 输入数据
         config: 运行配置
-        version: LangGraph 事件版本
+        version: LangGraph 事件版本 (v1, v2, v2_patches)
 
     Yields:
         StreamEvent 实例
@@ -388,6 +426,35 @@ async def stream_messages_tuple_from_graph(
         yield msg
 
 
+async def stream_debug_from_graph(
+    graph: CompiledStateGraph,
+    input_data: dict[str, Any],
+    config: RunnableConfig,
+) -> AsyncIterator[dict[str, Any]]:
+    """便捷函数：从图中流式获取调试信息
+
+    Args:
+        graph: 编译后的 LangGraph
+        input_data: 输入数据
+        config: 运行配置
+
+    Yields:
+        调试事件字典
+
+    Examples:
+        ```python
+        from app.agent.streaming import stream_debug_from_graph
+
+        async for debug_event in stream_debug_from_graph(graph, input_data, config):
+            print(f"Node: {debug_event.get('node')}")
+            print(f"Event: {debug_event.get('event')}")
+        ```
+    """
+    processor = StreamProcessor(graph)
+    async for debug_event in processor.stream_debug(input_data, config):
+        yield debug_event
+
+
 __all__ = [
     "StreamEvent",
     "StreamProcessor",
@@ -395,4 +462,5 @@ __all__ = [
     "stream_tokens_from_graph",
     "stream_events_from_graph",
     "stream_messages_tuple_from_graph",
+    "stream_debug_from_graph",
 ]

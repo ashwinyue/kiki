@@ -18,13 +18,13 @@ agent = create_react_agent(llm, wrapped_tools)
 
 import json
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from langchain_core.tools import BaseTool
 from langgraph.types import interrupt
 
 from app.observability.log_sanitizer import (
-    sanitize_agent_name,
     sanitize_log_input,
     sanitize_tool_name,
 )
@@ -89,15 +89,12 @@ class ToolInterceptor:
 
         # 首先尝试序列化为 JSON 以提高可读性
         try:
-            # 处理可 JSON 序列化的对象
             if isinstance(tool_input, (dict, list, tuple)):
                 return json.dumps(tool_input, indent=2, default=str, ensure_ascii=False)
             if isinstance(tool_input, str):
                 return tool_input
-            # 其他类型，尝试转换为 dict
             if hasattr(tool_input, "__dict__"):
                 return json.dumps(tool_input.__dict__, indent=2, default=str, ensure_ascii=False)
-            # 回退到字符串表示
             return str(tool_input)
         except (TypeError, ValueError):
             # JSON 序列化失败，使用字符串表示

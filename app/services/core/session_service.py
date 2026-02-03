@@ -290,14 +290,12 @@ class SessionService:
 
         session_obj = await self.get_session_or_404(session_id, user_id, tenant_id)
 
-        # 获取会话的前几条用户消息
         message_repo = MessageRepository(self.session)
         messages = await message_repo.list_by_role(session_id, "user", limit=3)
 
         if not messages:
             return "新对话"
 
-        # 提取用户消息内容
         user_input = " ".join([msg.content[:100] for msg in messages])
 
         try:
@@ -310,7 +308,6 @@ class SessionService:
             response = await llm_service.ainvoke(prompt, model_name=model_name)
             title = response.strip()[:50] or "新对话"
 
-            # 更新会话标题
             session_obj.name = title
             session_obj.updated_at = datetime.now(UTC)
             await self.session.commit()

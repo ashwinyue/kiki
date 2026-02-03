@@ -212,7 +212,7 @@ def _get_session_factory():
     return _db_pool.get_session_factory()
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     """获取异步数据库会话（依赖注入）
 
     Yields:
@@ -315,3 +315,11 @@ async def close_db():
     使用单例管理器统一管理连接关闭。
     """
     await _db_pool.close()
+
+
+async def dispose_engine():
+    """关闭数据库引擎（别名函数）
+
+    为优雅关闭提供统一的接口。
+    """
+    await close_db()

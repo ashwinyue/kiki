@@ -3,11 +3,13 @@
 对齐 WeKnora99 表结构
 """
 
-from datetime import UTC, datetime
 from typing import Any
+from datetime import datetime
 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Column, Field, SQLModel
+
+from app.models.timestamp import TimestampMixin
 
 
 class TenantBase(SQLModel):
@@ -22,7 +24,7 @@ class TenantBase(SQLModel):
     storage_used: int = Field(default=0)
 
 
-class Tenant(TenantBase, table=True):
+class Tenant(TimestampMixin, TenantBase, table=True):
     """租户表模型"""
 
     __tablename__ = "tenants"
@@ -36,8 +38,6 @@ class Tenant(TenantBase, table=True):
     kv_config: Any | None = Field(
         default=None, sa_column=Column(JSONB), description="通用 KV 配置存储"
     )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None)
 
 

@@ -21,10 +21,10 @@ LoggedTavilySearch = create_logged_tool(TavilySearchResults)
 import functools
 import logging
 import time
-from typing import Any, Callable, Type, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from app.observability.log_sanitizer import (
-    sanitize_agent_name,
     sanitize_log_input,
     sanitize_tool_name,
 )
@@ -55,7 +55,6 @@ def log_io(func: Callable) -> Callable:
         func_name = getattr(func, "__name__", str(func))
         safe_tool_name = sanitize_tool_name(func_name)
 
-        # 记录输入参数
         params = []
         for arg in args:
             params.append(sanitize_log_input(arg, max_length=100))
@@ -68,13 +67,11 @@ def log_io(func: Callable) -> Callable:
             params=", ".join(params),
         )
 
-        # 执行函数并计时
         start_time = time.time()
         try:
             result = func(*args, **kwargs)
             elapsed = time.time() - start_time
 
-            # 记录输出
             logger.info(
                 "tool_completed",
                 tool_name=safe_tool_name,
@@ -111,7 +108,6 @@ async def log_io_async(func: Callable) -> Callable:
         func_name = getattr(func, "__name__", str(func))
         safe_tool_name = sanitize_tool_name(func_name)
 
-        # 记录输入参数
         params = []
         for arg in args:
             params.append(sanitize_log_input(arg, max_length=100))
@@ -124,7 +120,6 @@ async def log_io_async(func: Callable) -> Callable:
             params=", ".join(params),
         )
 
-        # 执行函数并计时
         start_time = time.time()
         try:
             result = await func(*args, **kwargs)
@@ -226,7 +221,7 @@ class LoggedToolMixin:
         return result
 
 
-def create_logged_tool(base_tool_class: Type[T]) -> Type[T]:
+def create_logged_tool(base_tool_class: type[T]) -> type[T]:
     """创建带有日志功能的工具类
 
     工厂函数，通过多重继承为任何工具类添加日志功能。

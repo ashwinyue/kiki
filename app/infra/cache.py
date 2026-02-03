@@ -716,3 +716,686 @@ async def warmup_cache(
 
     logger.info("cache_warmed_up", count=count, ttl=ttl)
     return count
+
+
+# ============== 多层缓存（L1 内存 + L2 Redis）=============
+
+
+class CacheStats:
+    """缓存统计
+
+    跟踪缓存命中率、错误率等指标。
+    """
+
+    def __init__(self) -> None:
+        self.hits = 0
+        self.misses = 0
+        self.sets = 0
+        self.deletes = 0
+        self.errors = 0
+        self.l1_hits = 0
+        self.l2_hits = 0
+
+    @property
+    def hit_rate(self) -> float:
+        """计算命中率"""
+        total = self.hits + self.misses
+        return self.hits / total if total > 0 else 0.0
+
+    @property
+    def l1_hit_rate(self) -> float:
+        """L1 缓存命中率"""
+        total = self.hits
+        return self.l1_hits / total if total > 0 else 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换为字典"""
+        return {
+            "hits": self.hits,
+            "misses": self.misses,
+            "sets": self.sets,
+            "deletes": self.deletes,
+            "errors": self.errors,
+            "l1_hits": self.l1_hits,
+            "l2_hits": self.l2_hits,
+            "hit_rate": f"{self.hit_rate:.2%}",
+            "l1_hit_rate": f"{self.l1_hit_rate:.2%}",
+            "total_requests": self.hits + self.misses,
+        }
+
+    def reset(self) -> None:
+        """重置统计"""
+        self.__init__()
+
+
+_global_cache_stats = CacheStats()
+
+
+def get_cache_stats() -> CacheStats:
+    """获取全局缓存统计"""
+    return _global_cache_stats
+
+
+class L1MemoryCache:
+    """L1 内存缓存（LRU）
+
+    用于缓存热点数据，减少 Redis 网络往返。
+
+    特性：
+    - LRU 淘汰策略
+    - TTL 过期
+    - 最大容量限制
+    """
+
+    def __init__(self, max_size: int = 1000, default_ttl: int = 60) -> None:
+        """初始化 L1 缓存
+
+        Args:
+            max_size: 最大缓存条目数
+            default_ttl: 默认过期时间（秒）
+        """
+        from collections import OrderedDict
+
+        self.max_size = max_size
+        self.default_ttl = default_ttl
+        self._cache: OrderedDict[str, tuple[Any, float]] = OrderedDict()
+
+    def _is_expired(self, expiry: float) -> bool:
+        """检查是否过期"""
+        return time.time() > expiry
+
+    def get(self, key: str) -> Any | None:
+        """获取缓存值
+
+        Args:
+            key: 缓存键
+
+        Returns:
+            缓存值，不存在或过期时返回 None
+        """
+        if key not in self._cache:
+            return None
+
+        value, expiry = self._cache[key]
+
+        # 检查过期
+        if self._is_expired(expiry):
+            del self._cache[key]
+            return None
+
+        # 移到末尾（标记为最近使用）
+        self._cache.move_to_end(key)
+        return value
+
+    def set(self, key: str, value: Any, ttl: int | None = None) -> None:
+        """设置缓存值
+
+        Args:
+            key: 缓存键
+            value: 缓存值
+            ttl: 过期时间（秒）
+        """
+        ttl = ttl if ttl is not None else self.default_ttl
+        expiry = time.time() + ttl
+
+        # 如果键已存在，先删除
+        if key in self._cache:
+            del self._cache[key]
+
+        # 添加到末尾
+        self._cache[key] = (value, expiry)
+
+        # 超过容量时删除最旧的条目
+        if len(self._cache) > self.max_size:
+            self._cache.popitem(last=False)
+
+    def delete(self, key: str) -> bool:
+        """删除缓存值
+
+        Args:
+            key: 缓存键
+
+        Returns:
+            是否删除成功
+        """
+        if key in self._cache:
+            del self._cache[key]
+            return True
+        return False
+
+    def clear(self) -> None:
+        """清空缓存"""
+        self._cache.clear()
+
+    def cleanup_expired(self) -> int:
+        """清理过期条目
+
+        Returns:
+            清理的条目数
+        """
+        expired_keys = [
+            key
+            for key, (_, expiry) in self._cache.items()
+            if self._is_expired(expiry)
+        ]
+        for key in expired_keys:
+            del self._cache[key]
+        return len(expired_keys)
+
+    def __len__(self) -> int:
+        return len(self._cache)
+
+
+class MultiLayerCache:
+    """多层缓存管理器
+
+    提供 L1 (内存) + L2 (Redis) 双层缓存。
+    读取时先查 L1，未命中再查 L2，并回填 L1。
+    写入时同时写入 L1 和 L2。
+
+    Examples:
+        ```python
+        cache = MultiLayerCache()
+
+        # 设置缓存
+        await cache.set("user:123", {"name": "Alice"})
+
+        # 获取缓存（先查 L1，再查 L2）
+        user = await cache.get("user:123")
+
+        # 使用装饰器
+        @cache.cached(ttl=600, key_prefix="user")
+        async def get_user(user_id: int):
+            return await db.fetch_user(user_id)
+        ```
+    """
+
+    def __init__(
+        self,
+        l2_cache: RedisCache | None = None,
+        l1_max_size: int = 1000,
+        l1_ttl: int = 60,
+        enable_l1: bool = True,
+    ) -> None:
+        """初始化多层缓存
+
+        Args:
+            l2_cache: L2 Redis 缓存实例
+            l1_max_size: L1 缓存最大条目数
+            l1_ttl: L1 缓存默认过期时间（秒）
+            enable_l1: 是否启用 L1 缓存
+        """
+        self.l2_cache = l2_cache or cache_instance
+        self.enable_l1 = enable_l1
+        self.l1_cache = L1MemoryCache(max_size=l1_max_size, default_ttl=l1_ttl) if enable_l1 else None
+        self.stats = _global_cache_stats
+
+    async def get(self, key: str) -> Any | None:
+        """获取缓存值
+
+        Args:
+            key: 缓存键
+
+        Returns:
+            缓存值，不存在时返回 None
+        """
+        # 先查 L1
+        # 注意：需要使用 `is not None` 检查，因为 L1MemoryCache 有 __len__ 方法
+        if self.enable_l1 and self.l1_cache is not None:
+            value = self.l1_cache.get(key)
+            if value is not None:
+                self.stats.hits += 1
+                self.stats.l1_hits += 1
+                return value
+
+        # 再查 L2
+        try:
+            value = await self.l2_cache.get(key)
+            if value is not None:
+                self.stats.hits += 1
+                self.stats.l2_hits += 1
+
+                # 回填 L1
+                if self.enable_l1 and self.l1_cache is not None:
+                    self.l1_cache.set(key, value)
+
+                return value
+        except Exception as e:
+            logger.warning("multilayer_cache_l2_failed", key=key, error=str(e))
+
+        # 未命中
+        self.stats.misses += 1
+        return None
+
+    async def set(
+        self,
+        key: str,
+        value: Any,
+        ttl: int | None = None,
+        format: SerializationFormat = SerializationFormat.JSON,
+    ) -> bool:
+        """设置缓存值
+
+        Args:
+            key: 缓存键
+            value: 缓存值
+            ttl: 过期时间（秒）
+            format: 序列化格式
+
+        Returns:
+            是否成功
+        """
+        success = True
+
+        # 设置 L1（使用较短的 TTL）
+        # 注意：需要使用 `is not None` 检查，因为 L1MemoryCache 有 __len__ 方法
+        if self.enable_l1 and self.l1_cache is not None:
+            try:
+                self.l1_cache.set(key, value)
+                logger.debug("multilayer_cache_l1_set", key=key, value=value)
+            except Exception as e:
+                logger.warning("multilayer_cache_l1_set_failed", key=key, error=str(e))
+
+        # 设置 L2
+        if not await self.l2_cache.set(key, value, ttl, format):
+            success = False
+
+        if success:
+            self.stats.sets += 1
+
+        return success
+
+    async def delete(self, key: str) -> bool:
+        """删除缓存值
+
+        Args:
+            key: 缓存键
+
+        Returns:
+            是否成功
+        """
+        deleted = False
+
+        # 删除 L1
+        if self.enable_l1 and self.l1_cache:
+            if self.l1_cache.delete(key):
+                deleted = True
+
+        # 删除 L2
+        if await self.l2_cache.delete(key):
+            deleted = True
+
+        if deleted:
+            self.stats.deletes += 1
+
+        return deleted
+
+    def clear_l1(self) -> None:
+        """清空 L1 缓存"""
+        if self.l1_cache:
+            self.l1_cache.clear()
+
+    def get_stats(self) -> CacheStats:
+        """获取缓存统计"""
+        return self.stats
+
+    def cached(
+        self,
+        ttl: int = 300,
+        key_prefix: str = "",
+        exclude_params: list[str] | None = None,
+        use_l1: bool = True,
+    ):
+        """多层缓存装饰器
+
+        Args:
+            ttl: 缓存时间（秒）
+            key_prefix: 键前缀
+            exclude_params: 要排除的参数名
+            use_l1: 是否使用 L1 缓存
+
+        Returns:
+            装饰器
+        """
+        def decorator(func: Callable) -> Callable:
+            @wraps(func)
+            async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                # 生成缓存键
+                cache_key = generate_cache_key(
+                    func, args, kwargs, key_prefix, exclude_params
+                )
+
+                # 尝试获取缓存
+                if use_l1 and self.enable_l1 and self.l1_cache:
+                    value = self.l1_cache.get(cache_key)
+                    if value is not None:
+                        return value
+
+                value = await self.l2_cache.get(cache_key)
+                if value is not None:
+                    # 回填 L1
+                    if use_l1 and self.l1_cache:
+                        self.l1_cache.set(cache_key, value)
+                    return value
+
+                # 执行函数
+                result = await func(*args, **kwargs)
+
+                # 设置缓存
+                await self.set(cache_key, result, ttl)
+                if use_l1 and self.l1_cache:
+                    self.l1_cache.set(cache_key, result)
+
+                return result
+
+            return wrapper
+
+        return decorator
+
+
+# 全局多层缓存实例
+_multilayer_cache: MultiLayerCache | None = None
+
+
+def get_multilayer_cache() -> MultiLayerCache:
+    """获取多层缓存实例"""
+    global _multilayer_cache
+    if _multilayer_cache is None:
+        _multilayer_cache = MultiLayerCache()
+    return _multilayer_cache
+
+
+# ============== LLM 语义缓存 ==============
+
+
+class SemanticCache:
+    """语义缓存
+
+    基于嵌入向量相似度的缓存，用于 LLM 响应。
+    相似度高于阈值的查询会被视为"相同"，直接返回缓存结果。
+
+    Examples:
+        ```python
+        cache = SemanticCache(
+            embedding_model=embedding_function,
+            similarity_threshold=0.85
+        )
+
+        # 设置缓存
+        await cache.set("What is Python?", "Python is a programming language")
+
+        # 语义相似的查询会命中缓存
+        response = await cache.get("Tell me about Python")  # 会命中
+        ```
+    """
+
+    def __init__(
+        self,
+        embedding_model: Callable[[str], list[float]] | None = None,
+        similarity_threshold: float = 0.85,
+        ttl: int = 3600,
+        cache_backend: RedisCache | None = None,
+    ) -> None:
+        """初始化语义缓存
+
+        Args:
+            embedding_model: 嵌入模型函数
+            similarity_threshold: 相似度阈值（0-1）
+            ttl: 缓存过期时间（秒）
+            cache_backend: 后端缓存（默认使用全局缓存）
+        """
+        self.embedding_model = embedding_model
+        self.similarity_threshold = similarity_threshold
+        self.ttl = ttl
+        self.cache_backend = cache_backend or cache_instance
+        self._index_key = "semantic_cache:index"
+        self._embeddings: dict[str, list[float]] = {}
+
+    def _cosine_similarity(
+        self,
+        vec1: list[float],
+        vec2: list[float],
+    ) -> float:
+        """计算余弦相似度
+
+        Args:
+            vec1, vec2: 向量
+
+        Returns:
+            相似度（0-1）
+        """
+        import math
+
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        norm1 = math.sqrt(sum(a * a for a in vec1))
+        norm2 = math.sqrt(sum(a * a for a in vec2))
+
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+
+        return dot_product / (norm1 * norm2)
+
+    async def set(
+        self,
+        query: str,
+        response: str,
+        ttl: int | None = None,
+    ) -> bool:
+        """设置语义缓存
+
+        Args:
+            query: 查询文本
+            response: 响应文本
+            ttl: 过期时间（秒）
+
+        Returns:
+            是否成功
+        """
+        if not self.embedding_model:
+            return False
+
+        ttl = ttl or self.ttl
+        query_key = f"semantic:query:{hashlib.md5(query.encode()).hexdigest()}"
+
+        # 计算嵌入
+        embedding = self.embedding_model(query)
+
+        # 先更新内存索引
+        self._embeddings[query_key] = embedding
+
+        # 存储到后端缓存
+        try:
+            success = await self.cache_backend.set(
+                query_key,
+                {
+                    "query": query,
+                    "response": response,
+                    "embedding": embedding,
+                },
+                ttl,
+            )
+            return success
+        except Exception as e:
+            logger.warning("semantic_cache_set_failed", query=query, error=str(e))
+            return False
+
+    async def get(self, query: str) -> str | None:
+        """获取语义缓存
+
+        Args:
+            query: 查询文本
+
+        Returns:
+            缓存的响应，未找到相似查询时返回 None
+        """
+        if not self.embedding_model:
+            return None
+
+        # 计算查询嵌入
+        query_embedding = self.embedding_model(query)
+
+        # 查找最相似的缓存
+        best_match: str | None = None
+        best_similarity = 0.0
+        best_key: str | None = None
+
+        for cache_key, embedding in list(self._embeddings.items()):
+            similarity = self._cosine_similarity(query_embedding, embedding)
+
+            if similarity >= self.similarity_threshold and similarity > best_similarity:
+                try:
+                    # 获取实际缓存的响应
+                    cached = await self.cache_backend.get(cache_key)
+                    if cached:
+                        best_match = cached.get("response")
+                        best_similarity = similarity
+                        best_key = cache_key
+                except Exception as e:
+                    logger.warning("semantic_cache_get_failed", key=cache_key, error=str(e))
+
+        if best_match:
+            logger.debug(
+                "semantic_cache_hit",
+                similarity=f"{best_similarity:.2f}",
+                threshold=self.similarity_threshold,
+            )
+
+        return best_match
+
+    def clear(self) -> None:
+        """清空语义缓存"""
+        self._embeddings.clear()
+
+
+# 全局语义缓存实例
+_semantic_cache: SemanticCache | None = None
+
+
+def get_semantic_cache() -> SemanticCache:
+    """获取语义缓存实例"""
+    global _semantic_cache
+    if _semantic_cache is None:
+        _semantic_cache = SemanticCache()
+    return _semantic_cache
+
+
+# ============== 租户隔离缓存 ==============
+
+
+class TenantCache:
+    """租户隔离缓存
+
+    为每个租户提供独立的缓存命名空间，
+    防止不同租户的数据混淆。
+
+    Examples:
+        ```python
+        cache = TenantCache()
+
+        # 租户 1
+        await cache.set(tenant_id=1, key="user:123", value={"name": "Alice"})
+
+        # 租户 2（相同键不会冲突）
+        await cache.set(tenant_id=2, key="user:123", value={"name": "Bob"})
+        ```
+    """
+
+    def __init__(
+        self,
+        cache_backend: MultiLayerCache | None = None,
+    ) -> None:
+        """初始化租户缓存
+
+        Args:
+            cache_backend: 后端缓存实例
+        """
+        self.cache = cache_backend or get_multilayer_cache()
+
+    def _make_key(self, tenant_id: int, key: str) -> str:
+        """生成租户隔离的缓存键
+
+        Args:
+            tenant_id: 租户 ID
+            key: 原始键
+
+        Returns:
+            带租户前缀的键
+        """
+        return f"tenant:{tenant_id}:{key}"
+
+    async def get(
+        self,
+        tenant_id: int,
+        key: str,
+    ) -> Any | None:
+        """获取租户缓存
+
+        Args:
+            tenant_id: 租户 ID
+            key: 缓存键
+
+        Returns:
+            缓存值
+        """
+        cache_key = self._make_key(tenant_id, key)
+        return await self.cache.get(cache_key)
+
+    async def set(
+        self,
+        tenant_id: int,
+        key: str,
+        value: Any,
+        ttl: int | None = None,
+    ) -> bool:
+        """设置租户缓存
+
+        Args:
+            tenant_id: 租户 ID
+            key: 缓存键
+            value: 缓存值
+            ttl: 过期时间（秒）
+
+        Returns:
+            是否成功
+        """
+        cache_key = self._make_key(tenant_id, key)
+        return await self.cache.set(cache_key, value, ttl)
+
+    async def delete(
+        self,
+        tenant_id: int,
+        key: str,
+    ) -> bool:
+        """删除租户缓存
+
+        Args:
+            tenant_id: 租户 ID
+            key: 缓存键
+
+        Returns:
+            是否成功
+        """
+        cache_key = self._make_key(tenant_id, key)
+        return await self.cache.delete(cache_key)
+
+    async def clear_tenant(self, tenant_id: int) -> None:
+        """清空租户的所有缓存
+
+        Args:
+            tenant_id: 租户 ID
+        """
+        # TODO: 使用 SCAN 删除租户的所有键
+        prefix = f"tenant:{tenant_id}:"
+        logger.info("tenant_cache_cleared", tenant_id=tenant_id)
+
+
+# 全局租户缓存实例
+_tenant_cache: TenantCache | None = None
+
+
+def get_tenant_cache() -> TenantCache:
+    """获取租户缓存实例"""
+    global _tenant_cache
+    if _tenant_cache is None:
+        _tenant_cache = TenantCache()
+    return _tenant_cache

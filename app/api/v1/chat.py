@@ -8,51 +8,34 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from starlette.requests import Request as StarletteRequest
 
-from app.agent import LangGraphAgent
 from app.agent.message_utils import extract_ai_content
 from app.agent.state import create_state_from_input
-from app.config.dependencies import (
-    get_agent_dep,
-    get_context_manager_dep,
-    get_llm_service_dep,
+from app.api.v1.dependencies import (
+    AgentDep,
+    TenantIdDep,
+    UserIdDep,
 )
-from app.middleware import TenantIdDep, get_current_user_dep, get_current_tenant_id
 from app.observability.logging import get_logger
 from app.rate_limit.limiter import RateLimit, limiter
 from app.schemas.chat import (
+    ChatHistoryResponse,
     ChatRequest,
     ChatResponse,
-    ChatHistoryResponse,
     Message,
     SSEEvent,
     StreamChatRequest,
     WebsearchConfig,
 )
-from app.services.session_service import resolve_effective_user_id
+from app.services.core.session_service import resolve_effective_user_id
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
-# ============== 依赖类型别名 ==============
-
-# Agent 依赖
-AgentDep = Annotated[LangGraphAgent, Depends(get_agent_dep)]
-
-# 租户 ID 依赖（可选）
-TenantIdDep = Annotated[int | None, Depends(get_current_tenant_id)]
-
-# 用户 ID 依赖（可选）
-UserIdDep = Annotated[str | None, Depends(get_current_user_dep)]
-
-
-# ============== 辅助依赖函数 ==============
 
 
 async def _validate_session_access_dep(
@@ -71,7 +54,7 @@ async def _validate_session_access_dep(
         HTTPException: 会话不存在或无权访问
     """
     from app.infra.database import session_scope
-    from app.services.session_service import SessionService
+    from app.services.core.session_service import SessionService
 
     async with session_scope() as db_session:
         service = SessionService(db_session)
@@ -102,9 +85,6 @@ def _prepare_websearch_config(
     return None
 
 
-# ============== Chat Endpoints ==============
-
-
 @router.post("", response_model=ChatResponse)
 @limiter.limit(RateLimit.CHAT)
 async def chat(
@@ -132,17 +112,14 @@ async def chat(
         ChatResponse: 聊天响应
     """
     try:
-        # 解析有效用户 ID
         effective_user_id = resolve_effective_user_id(request.user_id, user_id)
 
-        # 验证会话访问权限
         await _validate_session_access_dep(
             session_id=request.session_id,
             user_id=effective_user_id,
             tenant_id=tenant_id,
         )
 
-        # 准备 websearch 配置
         websearch_config = _prepare_websearch_config(request.websearch)
         if websearch_config:
             logger.info(
@@ -151,7 +128,6 @@ async def chat(
                 search_depth=websearch_config["search_depth"],
             )
 
-        # 使用依赖注入的 agent
         messages = await agent.get_response(
             message=request.message,
             session_id=request.session_id,
@@ -160,7 +136,6 @@ async def chat(
             websearch_config=websearch_config,
         )
 
-        # 获取最后一条 AI 消息
         content = extract_ai_content(messages)
 
         return ChatResponse(content=content, session_id=request.session_id)
@@ -245,7 +220,6 @@ async def chat_stream(
             callbacks = []
             try:
                 from app.agent.callbacks import KikiCallbackHandler
-
                 from app.config.settings import get_settings
 
                 settings = get_settings()
@@ -438,7 +412,6 @@ async def get_chat_history(
 async def clear_chat_history(
     session_id: str,
     agent: AgentDep,
-    context_manager=Depends(get_context_manager_dep),
     tenant_id: TenantIdDep = None,
     user_id: UserIdDep = None,
 ) -> dict[str, str]:
@@ -446,12 +419,10 @@ async def clear_chat_history(
 
     使用标准 FastAPI 依赖注入模式：
     - agent: 通过依赖注入获取 LangGraphAgent 实例
-    - context_manager: 通过依赖注入获取上下文管理器
 
     Args:
         session_id: 会话 ID
         agent: Agent 实例（依赖注入）
-        context_manager: 上下文管理器（依赖注入）
         tenant_id: 租户 ID（依赖注入）
         user_id: 用户 ID（依赖注入）
 
@@ -459,17 +430,8 @@ async def clear_chat_history(
         操作结果
     """
     try:
-        await _validate_session_access_dep(
-            session_id=session_id,
-            user_id=user_id,
-            tenant_id=tenant_id,
-        )
-
-        # 清除 agent 聊天历史
+        # 清除 agent 聊天历史（包括 PostgreSQL Checkpoint 和数据库消息）
         await agent.clear_chat_history(session_id)
-
-        # 清除上下文存储
-        await context_manager.clear_context(session_id)
 
         return {"status": "success", "message": "聊天历史已清除"}
 

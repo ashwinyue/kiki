@@ -11,11 +11,13 @@
     validation_rule: "^.{1,100}$"
 """
 
-from datetime import UTC, datetime
 from typing import Any
+from datetime import datetime
 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Column, Field, SQLModel
+
+from app.models.timestamp import TimestampMixin
 
 
 class PlaceholderBase(SQLModel):
@@ -38,7 +40,7 @@ class PlaceholderBase(SQLModel):
     is_enabled: bool = Field(default=True, description="是否启用")
 
 
-class Placeholder(PlaceholderBase, table=True):
+class Placeholder(TimestampMixin, PlaceholderBase, table=True):
     """占位符表模型"""
 
     __tablename__ = "placeholders"
@@ -62,8 +64,6 @@ class Placeholder(PlaceholderBase, table=True):
         description="额外元数据",
     )
     created_by: str | None = Field(default=None, max_length=36)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None)
 
 

@@ -3,11 +3,12 @@
 对齐 WeKnora99 表结构
 """
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from datetime import datetime
 
-from sqlalchemy import Boolean
-from sqlmodel import Column, Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
+
+from app.models.timestamp import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.thread import Thread
@@ -22,7 +23,6 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, hashed: str) -> bool:
     """验证密码（占位）"""
-    import hashlib
 
     return hash_password(password) == hashed
 
@@ -37,7 +37,7 @@ class UserBase(SQLModel):
     can_access_all_tenants: bool = Field(default=False)
 
 
-class User(UserBase, table=True):
+class User(TimestampMixin, UserBase, table=True):
     """用户表模型"""
 
     __tablename__ = "users"
@@ -45,8 +45,6 @@ class User(UserBase, table=True):
     id: str = Field(default=None, primary_key=True, max_length=36)  # UUID
     password_hash: str = Field(max_length=255)
     tenant_id: int | None = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None)
 
     # 关系

@@ -13,21 +13,26 @@
 # ============== 重新导出各模型 ==============
 
 # 用户
-from app.models.user import (
-    User,
-    UserCreate,
-    UserPublic,
-    UserUpdate,
-    hash_password,
-    verify_password,
+# 任务模块已移除（Celery 任务队列）
+# Token
+from datetime import datetime
+
+from sqlmodel import SQLModel
+
+# 长期记忆
+from app.models.memory import (
+    Memory,
+    MemoryCreate,
+    MemoryPublic,
+    MemoryUpdate,
 )
 
-# 租户
-from app.models.tenant import (
-    Tenant,
-    TenantCreate,
-    TenantPublic,
-    TenantUpdate,
+# 消息
+from app.models.message import (
+    Message,
+    MessageCreate,
+    MessagePublic,
+    MessageUpdate,
 )
 
 # 会话
@@ -39,12 +44,12 @@ from app.models.session import (
     SessionUpdate,
 )
 
-# 消息
-from app.models.message import (
-    Message,
-    MessageCreate,
-    MessagePublic,
-    MessageUpdate,
+# 租户
+from app.models.tenant import (
+    Tenant,
+    TenantCreate,
+    TenantPublic,
+    TenantUpdate,
 )
 
 # 线程
@@ -53,31 +58,14 @@ from app.models.thread import (
     ThreadCreate,
     ThreadPublic,
 )
-
-# 长期记忆
-from app.models.memory import (
-    Memory,
-    MemoryCreate,
-    MemoryPublic,
-    MemoryUpdate,
+from app.models.user import (
+    User,
+    UserCreate,
+    UserPublic,
+    UserUpdate,
+    hash_password,
+    verify_password,
 )
-
-# 任务
-from app.models.task import (
-    Task,
-    TaskCreate,
-    TaskUpdate,
-    TaskPublic,
-    TaskList,
-    TaskLog,
-    TaskLogCreate,
-    TaskLogPublic,
-)
-
-# Token
-from datetime import UTC, datetime
-
-from sqlmodel import SQLModel
 
 
 class Token(SQLModel):
@@ -130,15 +118,6 @@ __all__ = [
     "MemoryCreate",
     "MemoryUpdate",
     "MemoryPublic",
-    # 任务
-    "Task",
-    "TaskCreate",
-    "TaskUpdate",
-    "TaskPublic",
-    "TaskList",
-    "TaskLog",
-    "TaskLogCreate",
-    "TaskLogPublic",
     # Token
     "Token",
     "TokenPayload",

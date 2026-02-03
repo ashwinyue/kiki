@@ -13,7 +13,8 @@ from typing import Any
 
 from app.config.settings import get_settings
 from app.observability.logging import get_logger
-from app.services.elasticsearch_service import ElasticsearchService
+
+# ElasticsearchService 已移除（RAG 相关）
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -207,31 +208,12 @@ class SystemService:
         Returns:
             EngineStatus: 搜索引擎状态
         """
-        # 检查 Elasticsearch 配置
-        es_url = getattr(settings, "elasticsearch_url", None)
-        enabled = bool(es_url and es_url != "http://localhost:9200")
-        healthy = False
-        details: dict[str, str | bool] = {
-            "type": "Elasticsearch" if enabled else "未配置",
-        }
-
-        if enabled:
-            try:
-                service = ElasticsearchService()
-                health_info = await service.health_check()
-                healthy = health_info.get("status") == "healthy"
-                details["healthy"] = healthy
-                details["cluster_name"] = health_info.get("cluster_name", "unknown")
-                details["version"] = health_info.get("version", "unknown")
-            except Exception as e:
-                details["error"] = str(e)
-                logger.warning("search_engine_health_check_failed", error=str(e))
-
+        # Elasticsearch 已移除（RAG 相关）
         return EngineStatus(
-            name="Elasticsearch" if enabled else "未配置",
-            enabled=enabled,
-            healthy=healthy,
-            details=details,
+            name="未配置",
+            enabled=False,
+            healthy=False,
+            details={"type": "Elasticsearch 已移除"},
         )
 
     async def get_storage_info(self) -> dict[str, StorageBucket]:
@@ -292,7 +274,6 @@ class SystemService:
             result = []
 
             for bucket in buckets:
-                # 尝试获取桶策略
                 policy = "private"
                 try:
                     policy_str = client.get_bucket_policy(bucket.name)

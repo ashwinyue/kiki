@@ -31,9 +31,6 @@ router = APIRouter(prefix="/mcp-services", tags=["MCP Services"])
 logger = get_logger(__name__)
 
 
-# ============== CRUD 接口 ==============
-
-
 @router.get(
     "",
     response_model=MCPServiceListResponse,

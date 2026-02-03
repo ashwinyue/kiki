@@ -16,9 +16,6 @@ from app.observability.logging import get_logger
 logger = get_logger(__name__)
 
 
-# ============== 分页参数 ==============
-
-
 class PaginationParams(BaseModel):
     """分页参数"""
 
@@ -34,9 +31,6 @@ class PaginationParams(BaseModel):
     def limit(self) -> int:
         """返回限制数量"""
         return min(self.size, 100)  # 最大 100
-
-
-# ============== 分页结果 ==============
 
 
 class PaginatedResult[T](BaseModel):
@@ -64,9 +58,6 @@ class PaginatedResult[T](BaseModel):
             size=params.size,
             pages=pages,
         )
-
-
-# ============== 基础仓储 ==============
 
 
 class BaseRepository[T]:

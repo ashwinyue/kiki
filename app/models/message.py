@@ -3,11 +3,13 @@
 对齐 WeKnora99 表结构
 """
 
-from datetime import UTC, datetime
 from typing import Any
+from datetime import datetime
 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Column, Field, SQLModel
+
+from app.models.timestamp import TimestampMixin
 
 
 class MessageBase(SQLModel):
@@ -17,7 +19,7 @@ class MessageBase(SQLModel):
     content: str
 
 
-class Message(MessageBase, table=True):
+class Message(TimestampMixin, MessageBase, table=True):
     """消息表模型
 
     对应 WeKnora99 的 messages 表
@@ -36,8 +38,6 @@ class Message(MessageBase, table=True):
     tool_calls: Any | None = Field(default=None, sa_column=Column(JSONB))
 
     is_completed: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None)
 
 

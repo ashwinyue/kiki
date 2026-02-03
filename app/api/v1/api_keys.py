@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, status
 from starlette.requests import Request as StarletteRequest
 
 from app.api.v1.auth import get_current_user_id as get_current_user_id_int
-from app.rate_limit.limiter import RateLimit, limiter
 from app.models.api_key import (
     ApiKeyCreate,
     ApiKeyRead,
@@ -21,6 +20,7 @@ from app.models.api_key import (
     ApiKeyVerifyResponse,
 )
 from app.observability.logging import get_logger
+from app.rate_limit.limiter import RateLimit, limiter
 from app.services.api_key_management_service import (
     ApiKeyManagementService,
     get_api_key_management_service,
@@ -28,9 +28,6 @@ from app.services.api_key_management_service import (
 
 router = APIRouter(prefix="/api-keys", tags=["API Keys"])
 logger = get_logger(__name__)
-
-
-# ============== API Key 管理接口 ==============
 
 
 @router.post(

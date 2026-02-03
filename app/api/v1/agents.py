@@ -8,8 +8,8 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from starlette.requests import Request as StarletteRequest
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request as StarletteRequest
 
 from app.infra.database import get_session
 from app.middleware import TenantIdDep
@@ -33,14 +33,10 @@ from app.schemas.agent import (
     PlaceholderSchema,
     PlaceholderUpdate,
 )
-from app.services.agent_clone import AgentCloner
-from app.services.placeholder_service import PlaceholderService
+from app.services import AgentCloner, PlaceholderService
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 logger = get_logger(__name__)
-
-
-# ============== 单 Agent CRUD ==============
 
 
 async def get_agent_repository(

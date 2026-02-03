@@ -3,10 +3,12 @@
 用于 LangGraph 状态持久化。
 """
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from datetime import datetime
 
 from sqlmodel import Field, Relationship, SQLModel
+
+from app.models.timestamp import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -19,16 +21,13 @@ class ThreadBase(SQLModel):
     session_id: str | None = Field(default=None, max_length=255)
 
 
-class Thread(ThreadBase, table=True):
+class Thread(TimestampMixin, ThreadBase, table=True):
     """线程表模型（用于 LangGraph 状态持久化）"""
 
     __tablename__ = "threads"
 
     # 主键（字符串类型的 thread_id）
     id: str = Field(max_length=255, primary_key=True)
-    # 基础字段
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     # 关联字段
     user_id: int | None = Field(default=None, foreign_key="users.id")
     tenant_id: int | None = Field(default=None)

@@ -17,7 +17,6 @@ from app.llm.cost_tracker import (  # type: ignore
     set_cost_tracker,
     track_llm_call,
 )
-
 from app.llm.embeddings import (  # type: ignore
     DashScopeEmbeddings,
     EmbeddingProvider,

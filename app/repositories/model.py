@@ -8,7 +8,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.knowledge import Model
+from app.models.llm_model import Model
 from app.repositories.base import BaseRepository, PaginatedResult, PaginationParams
 
 
@@ -90,7 +90,6 @@ class ModelRepository(BaseRepository[Model]):
         Returns:
             是否设置成功
         """
-        # 获取模型
         model = await self.get_by_tenant(model_id, tenant_id)
         if not model:
             return False

@@ -25,7 +25,6 @@ template = get_template("router")
 ```
 """
 
-import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -36,8 +35,6 @@ from jinja2 import (
     Environment,
     FileSystemLoader,
     StrictUndefined,
-    Template,
-    TemplateNotFound,
     TemplateSyntaxError,
 )
 from langchain_core.prompts import ChatPromptTemplate
@@ -67,7 +64,6 @@ def _get_jinja_env() -> Environment:
     """
     global _jinja_env
     if _jinja_env is None:
-        # 检查模板目录是否存在
         if _TEMPLATE_DIR.exists():
             loader = FileSystemLoader(_TEMPLATE_DIR)
             logger.info("using_filesystem_loader", template_dir=str(_TEMPLATE_DIR))
@@ -83,7 +79,6 @@ def _get_jinja_env() -> Environment:
             autoescape=False,  # Prompt 不需要 HTML 转义
         )
 
-        # 注册全局函数
         _jinja_env.globals.update(
             {
                 "now": datetime.now,
@@ -94,8 +89,6 @@ def _get_jinja_env() -> Environment:
 
     return _jinja_env
 
-
-# ============== 内置模板 ==============
 
 _BUILTIN_TEMPLATES: dict[str, dict[str, str]] = {
     "chat": {

@@ -21,9 +21,7 @@ result = await python_repl("import pandas as pd; df = pd.DataFrame({'a': [1,2,3]
 import asyncio
 import functools
 import io
-import logging
-import sys
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from typing import Any
 
 from langchain_core.tools import tool

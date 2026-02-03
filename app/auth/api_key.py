@@ -3,24 +3,22 @@
 提供 API Key 生成、验证和管理功能。
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated
 
 import bcrypt
 from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
+from app.infra.database import get_session
 from app.models.api_key import (
-    ApiKey,
-    ApiKeyType,
     ApiKeyStatus,
-    ApiKeyVerifyResponse,
+    ApiKeyType,
 )
 from app.observability.logging import get_logger
 from app.repositories.api_key import ApiKeyRepository
-from app.infra.database import get_session
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)
 

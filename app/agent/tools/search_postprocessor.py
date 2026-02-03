@@ -21,7 +21,7 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
-from app.observability.log_sanitizer import sanitize_log_input, sanitize_tool_name
+from app.observability.log_sanitizer import sanitize_log_input
 
 logger = logging.getLogger(__name__)
 
@@ -78,21 +78,17 @@ class SearchResultPostProcessor:
         seen_urls = set()
 
         for result in results:
-            # 1. 去重
             cleaned_result = self._remove_duplicate(result, seen_urls)
             if not cleaned_result:
                 continue
 
-            # 2. 过滤低质量结果
             if not self._check_quality(cleaned_result):
                 continue
 
-            # 3. 清理 base64 图片
             cleaned_result = self._remove_base64_images(cleaned_result)
             if not cleaned_result:
                 continue
 
-            # 4. 截断过长内容
             if self.max_content_length > 0:
                 cleaned_result = self._truncate_content(cleaned_result)
 

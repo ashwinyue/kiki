@@ -8,14 +8,14 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from app.config.settings import Settings, get_settings
-from app.llm import LLMService
 from app.observability.logging import get_logger
 
 if TYPE_CHECKING:
-    from app.agent import LangGraphAgent
+    from app.agent import ChatAgent  # 使用 ChatAgent 替代已废弃的 LangGraphAgent
     from app.agent.memory.base import BaseLongTermMemory
     from app.agent.memory.context import ContextManager
     from app.agent.memory.manager import MemoryManager, MemoryManagerFactory
+    from app.llm import LLMService
 
 logger = get_logger(__name__)
 
@@ -24,14 +24,14 @@ logger = get_logger(__name__)
 
 
 @lru_cache
-def _get_llm_service_cached() -> LLMService:
+def _get_llm_service_cached():  # -> LLMService (使用字符串避免循环导入)
     """获取 LLM 服务（缓存，单例）"""
     from app.llm import get_llm_service
 
     return get_llm_service()
 
 
-async def get_llm_service_dep() -> AsyncIterator[LLMService]:
+async def get_llm_service_dep():  # -> AsyncIterator[LLMService]
     """LLM 服务依赖注入提供者
 
     Returns:
@@ -55,14 +55,14 @@ class AgentContainer:
     """
 
     def __init__(self) -> None:
-        self._agents: dict[str, "LangGraphAgent"] = {}
-        self._default_agent: "LangGraphAgent | None" = None
+        self._agents: dict[str, "ChatAgent"] = {}
+        self._default_agent: "ChatAgent | None" = None
 
     async def get_agent(
         self,
         session_id: str | None = None,
         user_id: str | None = None,
-    ) -> "LangGraphAgent":
+    ) -> "ChatAgent":
         """获取 Agent 实例
 
         Args:
@@ -70,21 +70,21 @@ class AgentContainer:
             user_id: 用户 ID
 
         Returns:
-            LangGraphAgent 实例
+            ChatAgent 实例
         """
         # 如果没有会话 ID，返回默认 Agent
         if not session_id:
             if self._default_agent is None:
-                from app.agent import create_agent
+                from app.agent import ChatAgent
 
-                self._default_agent = create_agent()
+                self._default_agent = ChatAgent()
             return self._default_agent
 
         # 为每个会话创建独立的 Agent（支持多租户隔离）
         if session_id not in self._agents:
-            from app.agent import create_agent
+            from app.agent import ChatAgent
 
-            self._agents[session_id] = create_agent()
+            self._agents[session_id] = ChatAgent()
             logger.debug("agent_created_for_session", session_id=session_id)
 
         return self._agents[session_id]
@@ -117,7 +117,7 @@ _agent_container = AgentContainer()
 async def get_agent_dep(
     session_id: str | None = None,
     user_id: str | None = None,
-) -> AsyncIterator["LangGraphAgent"]:
+) -> AsyncIterator["ChatAgent"]:
     """Agent 依赖注入提供者
 
     Args:
@@ -125,13 +125,13 @@ async def get_agent_dep(
         user_id: 用户 ID
 
     Returns:
-        LangGraphAgent 实例
+        ChatAgent 实例
 
     Examples:
         ```python
         @app.post("/chat")
         async def chat(
-            agent: Annotated[LangGraphAgent, Depends(get_agent_dep)],
+            agent: Annotated[ChatAgent, Depends(get_agent_dep)],
             message: str,
         ):
             # ...

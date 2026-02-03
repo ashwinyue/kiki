@@ -3,11 +3,13 @@
 对齐 WeKnora99 表结构
 """
 
-from datetime import UTC, datetime
 from typing import Any
+from datetime import datetime
 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Column, Field, SQLModel
+
+from app.models.timestamp import TimestampMixin
 
 
 class MCPServiceBase(SQLModel):
@@ -19,7 +21,7 @@ class MCPServiceBase(SQLModel):
     transport_type: str = Field(max_length=50)  # stdio, sse, http
 
 
-class MCPService(MCPServiceBase, table=True):
+class MCPService(TimestampMixin, MCPServiceBase, table=True):
     """MCP 服务表模型"""
 
     __tablename__ = "mcp_services"
@@ -32,8 +34,6 @@ class MCPService(MCPServiceBase, table=True):
     advanced_config: Any | None = Field(default=None, sa_column=Column(JSONB))
     stdio_config: Any | None = Field(default=None, sa_column=Column(JSONB))
     env_vars: Any | None = Field(default=None, sa_column=Column(JSONB))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None)
 
 

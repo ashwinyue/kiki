@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 # ============== 数据库依赖 ==============
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """获取数据库会话（依赖注入）
 
     这是 get_session 的别名，用于 API 路由。

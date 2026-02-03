@@ -1,71 +1,62 @@
 """LangGraph 工作流模块
 
-参考 DeerFlow 项目结构，提供 LangGraph 工作流构建和执行功能。
-
-目录结构:
-    graph/
-    ├── types.py      # 状态定义
-    ├── nodes.py      # 节点函数
-    ├── builder.py    # 图构建函数
-    ├── utils.py      # 工具函数
-    ├── interrupt.py  # Human-in-the-Loop
-    ├── react.py      # ReAct Agent
-    └── cache.py      # 图缓存
+提供 LangGraph 工作流构建和执行功能。
 
 使用示例:
     ```python
     from app.agent.graph import compile_chat_graph, invoke_chat_graph
 
-    # 方式1: 编译图后调用
+    # 编译图后调用
     graph = compile_chat_graph()
     result = await graph.ainvoke(
         {"messages": [("user", "你好")]},
         {"configurable": {"thread_id": "session-123"}}
     )
-
-    # 方式2: 使用便捷函数
-    result = await invoke_chat_graph(
-        message="你好",
-        session_id="session-123"
-    )
-
-    # 方式3: 使用 InterruptGraph
-    from app.agent.graph import create_interrupt_graph
-
-    graph = create_interrupt_graph()
-    await graph.ainvoke(...)
     ```
 """
 
 # 状态类型
-from app.agent.graph.types import (
-    AgentState,
-    ChatState,
-    ReActState,
-    add_messages,
-    create_agent_state,
-    create_chat_state,
-    create_react_state,
-    create_state_from_input,
-    increment_iteration,
-    preserve_state_meta_fields,
-    should_stop_iteration,
-)
-
-# 节点函数
-from app.agent.graph.nodes import (
-    chat_node,
-    create_chat_node_factory,
-    route_by_tools,
-    tools_node,
-)
-
 # 构建函数
+# 高级图构建器（三层记忆架构）
+from app.agent.graph.advanced_builder import (
+    AdvancedGenerationBuilder,
+    create_advanced_generation_workflow,
+    run_advanced_generation,
+)
+
+# Agent 工厂（分层 LLM + create_react_agent）
+from app.agent.graph.agent_factory import (
+    create_agent,
+    create_agents,
+    create_analyst_agent,
+    create_coder_agent,
+    create_planner_agent,
+    create_reporter_agent,
+    create_researcher_agent,
+)
 from app.agent.graph.builder import (
     build_chat_graph,
     compile_chat_graph,
     invoke_chat_graph,
     stream_chat_graph,
+)
+
+# 图缓存
+from app.agent.graph.cache import (
+    GraphCache,
+    clear_graph_cache,
+    get_cached_graph,
+    get_graph_cache,
+    get_graph_cache_stats,
+)
+
+# Checkpoint 持久化
+from app.agent.graph.checkpoint import (
+    close_postgres_checkpointer,
+    get_checkpoint_count,
+    get_checkpointer,
+    get_postgres_checkpointer,
+    list_checkpoints,
 )
 
 # Human-in-the-Loop
@@ -80,30 +71,64 @@ from app.agent.graph.interrupt import (
     interrupt_chat_node,
 )
 
+# Multi-Agent
+from app.agent.graph.multi_agent import (
+    MultiAgentGraphBuilder,
+    agent_execution_context,
+    build_multi_agent_graph,
+    create_worker_node,
+    supervisor_node,
+)
+
+# 节点函数
+from app.agent.graph.nodes import (
+    chat_node,
+)
+
 # ReAct Agent
 from app.agent.graph.react import (
     ReactAgent,
     create_react_agent,
 )
 
-# 图缓存
-from app.agent.graph.cache import (
-    GraphCache,
-    clear_graph_cache,
-    get_cached_graph,
-    get_graph_cache,
-    get_graph_cache_stats,
+# 所有 State 类从 state.py 导入（避免重复定义）
+from app.agent.state import (
+    AdvancedGenerationState,
+    AgentState,
+    ChatState,
+    MultiAgentState,
+    ReActState,
+    add_messages,
+    create_agent_state,
+    create_chat_state,
+    create_react_state,
+    create_state_from_input,
+    # 注意: increment_iteration, preserve_state_meta_fields 不在 state.__all__ 中
+    # 如果需要这些函数，从 types.py 或其他地方导入
+    should_stop_iteration,
 )
+
+# 其他工具函数从 state.utils 导入
+try:
+    from app.agent.state.utils import increment_iteration
+except ImportError:
+    pass
+try:
+    from app.agent.state.utils import preserve_state_meta_fields
+except ImportError:
+    pass
 
 # 工具函数
 from app.agent.graph.utils import (
-    extract_ai_content,
-    format_messages_to_dict,
     get_message_content,
     has_tool_calls,
     is_user_message,
     should_continue,
     validate_state,
+)
+from app.agent.message_utils import (
+    extract_ai_content,
+    format_messages_to_dict,
 )
 
 __all__ = [
@@ -111,6 +136,8 @@ __all__ = [
     "ChatState",
     "AgentState",
     "ReActState",
+    "MultiAgentState",
+    "AdvancedGenerationState",
     "add_messages",
     "create_chat_state",
     "create_agent_state",
@@ -121,14 +148,23 @@ __all__ = [
     "preserve_state_meta_fields",
     # ============== 节点函数 ==============
     "chat_node",
-    "tools_node",
-    "route_by_tools",
-    "create_chat_node_factory",
     # ============== 构建函数 ==============
     "build_chat_graph",
     "compile_chat_graph",
     "invoke_chat_graph",
     "stream_chat_graph",
+    # ============== Checkpoint 持久化 ==============
+    "get_postgres_checkpointer",
+    "get_checkpointer",
+    "close_postgres_checkpointer",
+    "list_checkpoints",
+    "get_checkpoint_count",
+    # ============== Multi-Agent ==============
+    "MultiAgentGraphBuilder",
+    "build_multi_agent_graph",
+    "create_worker_node",
+    "supervisor_node",
+    "agent_execution_context",
     # ============== Human-in-the-Loop ==============
     "InterruptGraph",
     "create_interrupt_graph",
@@ -141,6 +177,18 @@ __all__ = [
     # ============== ReAct Agent ==============
     "ReactAgent",
     "create_react_agent",
+    # ============== Agent 工厂 ==============
+    "create_agent",
+    "create_agents",
+    "create_planner_agent",
+    "create_researcher_agent",
+    "create_analyst_agent",
+    "create_coder_agent",
+    "create_reporter_agent",
+    # ============== 高级图构建器（三层记忆架构）=============
+    "AdvancedGenerationBuilder",
+    "create_advanced_generation_workflow",
+    "run_advanced_generation",
     # ============== 图缓存 ==============
     "GraphCache",
     "get_graph_cache",

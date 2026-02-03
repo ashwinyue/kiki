@@ -1,6 +1,54 @@
 """Pydantic 模式定义"""
 
 # 统一响应
+# Agent
+from app.schemas.agent import (
+    AgentConfig,
+    AgentCopyRequest,
+    AgentCopyResponse,
+    AgentDetailResponse,
+    AgentListResponse,
+    AgentPublic,
+    AgentRequest,
+    BatchAgentCopyRequest,
+    BatchAgentCopyResponse,
+)
+
+# 聊天
+from app.schemas.chat import (
+    ChatHistoryResponse,
+    ChatRequest,
+    ChatResponse,
+    Message,
+    SSEEvent,
+    StreamChatRequest,
+)
+
+# MCP 服务
+from app.schemas.mcp_service import (
+    MCPServiceListResponse,
+    MCPServiceRequest,
+    MCPServiceResponse,
+)
+
+# 消息
+from app.schemas.message import (
+    MessageListResponse,
+    MessageRegenerateRequest,
+    MessageResponse,
+    MessageSearchResponse,
+    MessageUpdate,
+)
+
+# 模型
+from app.schemas.model import (
+    ModelCreate,
+    ModelParameters,
+    ModelResponse,
+    ModelSource,
+    ModelType,
+    ModelUpdate,
+)
 from app.schemas.response import (
     ApiResponse,
     DataResponse,
@@ -8,43 +56,23 @@ from app.schemas.response import (
     PaginationMeta,
 )
 
-# 聊天
-from app.schemas.chat import (
-    ChatRequest,
-    StreamChatRequest,
-    ChatResponse,
-    Message,
-    ChatHistoryResponse,
-    SSEEvent,
-)
-
-# Agent
-from app.schemas.agent import (
-    AgentConfig,
-    AgentRequest,
-    AgentPublic,
-    AgentDetailResponse,
-    AgentListResponse,
-    AgentCopyRequest,
-    AgentCopyResponse,
-    BatchAgentCopyRequest,
-    BatchAgentCopyResponse,
+# 会话
+from app.schemas.session import (
+    GenerateTitleRequest,
+    SessionCreate,
+    SessionDetailResponse,
+    SessionListResponse,
+    SessionResponse,
+    SessionUpdate,
 )
 
 # 租户
 from app.schemas.tenant import (
-    TenantListResponse,
     ApiKeyResponse,
     TenantItem,
+    TenantListResponse,
     TenantSearchRequest,
     TenantSearchResponse,
-)
-
-# MCP 服务
-from app.schemas.mcp_service import (
-    MCPServiceRequest,
-    MCPServiceResponse,
-    MCPServiceListResponse,
 )
 
 # 工具
@@ -53,87 +81,16 @@ from app.schemas.tool import (
     ToolsListResponse,
 )
 
-# 会话
-from app.schemas.session import (
-    SessionCreate,
-    SessionUpdate,
-    SessionResponse,
-    SessionDetailResponse,
-    SessionListResponse,
-    GenerateTitleRequest,
-)
-
-# 消息
-from app.schemas.message import (
-    MessageResponse,
-    MessageUpdate,
-    MessageRegenerateRequest,
-    MessageListResponse,
-    MessageSearchResponse,
-)
-
-# 评估
-from app.schemas.evaluation import (
-    RunEvaluationRequest,
-    RunEvaluationStreamRequest,
-    DatasetListItem,
-    EvaluationRunResponse,
-    EvaluationStatusResponse,
-)
-
-# 知识库
-from app.schemas.knowledge import (
-    ChunkingConfig,
-    KnowledgeBaseCreate,
-    KnowledgeBaseUpdate,
-    KnowledgeBaseResponse,
-    HybridSearchRequest,
-    HybridSearchResult,
-    KnowledgeResponse,
-)
-
-# 模型
-from app.schemas.model import (
-    ModelType,
-    ModelSource,
-    ModelParameters,
-    ModelCreate,
-    ModelUpdate,
-    ModelResponse,
-)
-
 # 网络搜索
 from app.schemas.web_search import (
-    WebSearchConfig,
-    WebSearchResult,
-    WebSearchProviderInfo,
-    WebSearchRequest,
-    WebSearchResponse,
-    WebSearchProvidersResponse,
     WebSearchCompressRequest,
     WebSearchCompressResponse,
-)
-
-# Elasticsearch
-from app.schemas.elasticsearch import (
-    IndexCreateRequest,
-    IndexStatsResponse,
-    IndexListResponse,
-    DocumentIndexRequest,
-    DocumentIndexBatchRequest,
-    DocumentUpdateRequest,
-    DocumentResponse,
-    BulkOperationResponse,
-    ElasticsearchSearchRequest,
-    HybridSearchRequest,
-    RawSearchRequest,
-    ElasticsearchSearchResult,
-    ElasticsearchSearchResponse,
-    AnalyzeRequest,
-    AnalyzeResponse,
-    AnalyzeToken,
-    ElasticsearchConfigResponse,
-    ElasticsearchHealthResponse,
+    WebSearchConfig,
+    WebSearchProviderInfo,
+    WebSearchProvidersResponse,
+    WebSearchRequest,
+    WebSearchResponse,
+    WebSearchResult,
 )
 
 __all__ = [
@@ -185,20 +142,6 @@ __all__ = [
     "MessageRegenerateRequest",
     "MessageListResponse",
     "MessageSearchResponse",
-    # 评估
-    "RunEvaluationRequest",
-    "RunEvaluationStreamRequest",
-    "DatasetListItem",
-    "EvaluationRunResponse",
-    "EvaluationStatusResponse",
-    # 知识库
-    "ChunkingConfig",
-    "KnowledgeBaseCreate",
-    "KnowledgeBaseUpdate",
-    "KnowledgeBaseResponse",
-    "HybridSearchRequest",
-    "HybridSearchResult",
-    "KnowledgeResponse",
     # 模型
     "ModelType",
     "ModelSource",
@@ -215,23 +158,4 @@ __all__ = [
     "WebSearchProvidersResponse",
     "WebSearchCompressRequest",
     "WebSearchCompressResponse",
-    # Elasticsearch
-    "IndexCreateRequest",
-    "IndexStatsResponse",
-    "IndexListResponse",
-    "DocumentIndexRequest",
-    "DocumentIndexBatchRequest",
-    "DocumentUpdateRequest",
-    "DocumentResponse",
-    "BulkOperationResponse",
-    "ElasticsearchSearchRequest",
-    "HybridSearchRequest",
-    "RawSearchRequest",
-    "ElasticsearchSearchResult",
-    "ElasticsearchSearchResponse",
-    "AnalyzeRequest",
-    "AnalyzeResponse",
-    "AnalyzeToken",
-    "ElasticsearchConfigResponse",
-    "ElasticsearchHealthResponse",
 ]

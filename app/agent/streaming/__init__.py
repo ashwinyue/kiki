@@ -7,6 +7,7 @@
 from app.agent.streaming.base import (
     StreamEvent,
     StreamProcessor,
+    stream_debug_from_graph,
     stream_events_from_graph,
     stream_tokens_from_graph,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "StreamProcessor",
     "stream_tokens_from_graph",
     "stream_events_from_graph",
+    "stream_debug_from_graph",
     # 取消功能
     "CancellableStreamProcessor",
     "CancellationToken",

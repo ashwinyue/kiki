@@ -41,13 +41,6 @@ from app.agent.tools.decorators import (
     log_io_async,
     track_tool_metrics,
 )
-from app.agent.tools.search_postprocessor import (
-    SearchResultPostProcessor,
-    extract_domain,
-    is_pdf_url,
-    is_valid_url,
-    normalize_url,
-)
 
 # 导出工具注册系统
 from app.agent.tools.registry import (
@@ -64,13 +57,20 @@ from app.agent.tools.registry import (
     set_tool_error_handler,
     tool,
 )
+from app.agent.tools.search_postprocessor import (
+    SearchResultPostProcessor,
+    extract_domain,
+    is_pdf_url,
+    is_valid_url,
+    normalize_url,
+)
 
 # 导出 MCP 工具集成（可选依赖）
 try:
     from app.agent.tools.mcp import (
+        PREDEFINED_MCP_SERVERS,
         MCPClient,
         MCPRegistry,
-        PREDEFINED_MCP_SERVERS,
         get_predefined_mcp_server,
         list_predefined_mcp_servers,
         load_mcp_tools,

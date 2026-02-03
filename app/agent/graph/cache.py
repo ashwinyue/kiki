@@ -6,7 +6,6 @@
 
 from collections.abc import Callable
 from threading import RLock
-from typing import Any
 
 from langgraph.graph.state import CompiledStateGraph
 
@@ -94,9 +93,7 @@ class GraphCache:
         cache_key = _create_cache_key(system_prompt)
 
         with self._lock:
-            # 检查缓存
             if cache_key in self._cache:
-                # 更新 LRU 顺序
                 self._cache_keys.remove(cache_key)
                 self._cache_keys.append(cache_key)
                 logger.debug("graph_cache_hit", key=cache_key)

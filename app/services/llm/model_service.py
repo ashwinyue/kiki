@@ -3,9 +3,11 @@
 提供模型的业务逻辑
 """
 
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.knowledge import Model
+from app.models.llm_model import Model
 from app.observability.logging import get_logger
 from app.repositories.base import PaginationParams
 from app.repositories.model import ModelRepository

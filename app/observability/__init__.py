@@ -16,13 +16,6 @@ from app.observability.audit import (
     record_event,
     record_tool_call,
 )
-from app.observability.logging import (
-    bind_context,
-    clear_context,
-    configure_logging,
-    get_logger,
-    unbind_context,
-)
 from app.observability.log_sanitizer import (
     SafeLogFormatter,
     create_safe_log_message,
@@ -33,6 +26,13 @@ from app.observability.log_sanitizer import (
     sanitize_thread_id,
     sanitize_tool_name,
     sanitize_user_content,
+)
+from app.observability.logging import (
+    bind_context,
+    clear_context,
+    configure_logging,
+    get_logger,
+    unbind_context,
 )
 from app.observability.metrics import (
     increment_active_sessions,

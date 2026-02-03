@@ -125,8 +125,7 @@ class ShortTermMemory:
             state = await checkpointer.aget_tuple(config)
 
             if state and state.metadata:
-                # 从 checkpoint 中提取消息
-                # 这里需要根据实际的 checkpoint 结构来提取
+                # 从 checkpoint 中提取消息（需要根据实际的 checkpoint 结构来提取）
                 logger.debug("messages_retrieved_from_checkpoint")
                 return []
 

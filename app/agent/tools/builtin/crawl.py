@@ -17,8 +17,6 @@ content = await crawl_url("https://example.com")
 ```
 """
 
-import asyncio
-import logging
 from typing import Literal
 
 import httpx
@@ -39,12 +37,12 @@ MAX_CONTENT_LENGTH = 50000
 
 
 class CrawlerError(Exception):
-    """爬虫错误"""
+    """爬虫错误（包含HTTP状态码和失败原因）"""
     pass
 
 
 class CrawlerConfig:
-    """爬虫配置"""
+    """爬虫配置（超时、内容长度限制、User-Agent）"""
 
     def __init__(
         self,
@@ -60,21 +58,14 @@ class CrawlerConfig:
 
 
 class JinaReader:
-    """Jina Reader 客户端
-
-    使用 Jina Reader API 爬取网页内容。
-    """
+    """Jina Reader 客户端（使用 Jina Reader API 爬取网页内容）"""
 
     def __init__(self, config: CrawlerConfig | None = None):
         self.config = config or CrawlerConfig()
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
-        """获取 HTTP 客户端
-
-        Returns:
-            httpx.AsyncClient 实例
-        """
+        """获取或创建 HTTP 客户端（带超时和User-Agent配置）"""
         if self._client is None:
             timeout = httpx.Timeout(self.config.timeout)
             headers = {
@@ -147,10 +138,7 @@ class JinaReader:
             raise CrawlerError(f"Crawling failed: {str(e)}")
 
     async def close(self):
-        """关闭客户端"""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
+        """关闭 HTTP 客户端并清理资源"""
 
     async def __aenter__(self):
         return self
@@ -226,12 +214,9 @@ async def crawl_url(
     logger.info("crawl_url_start", url=safe_url, max_length=max_length)
 
     try:
-        # 获取爬虫实例
         crawler = JinaReader(
             CrawlerConfig(max_content_length=max_length)
         )
-
-        # 爬取内容
         content = await crawler.crawl(url, return_format="markdown")
 
         logger.info(

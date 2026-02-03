@@ -17,6 +17,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent as langgraph_create_react_agent
 from langgraph.types import RunnableConfig
 
+from app.agent.base import BaseAgent
 from app.llm import LLMService, get_llm_service
 from app.observability.logging import get_logger
 
@@ -48,38 +49,31 @@ from app.config.settings import get_settings  # noqa: E402
 settings = get_settings()
 
 
-class ReactAgent:
-    """ReAct Agent 封装类
+class ReactAgent(BaseAgent):
+    """ReAct Agent 实现（继承 BaseAgent）
 
-    提供与 LangGraphAgent 相同的接口，但使用 LangGraph 内置的 create_react_agent。
+    使用 LangGraph 内置的 create_react_agent。
 
     优点:
-    - 开箱即用的 ReAct 模式
-    - 自动处理工具调用循环
-    - 更少的代码
+        - 开箱即用的 ReAct 模式
+        - 自动处理工具调用循环
+        - 更少的代码
+        - 统一的 BaseAgent 接口
 
     适用场景:
-    - 快速原型开发
-    - 简单的 Agent 应用
-    - 不需要自定义状态管理
+        - 需要工具调用的 Agent
+        - 快速原型开发
+        - 简单的 Agent 应用
 
-    生命周期管理:
-        支持异步上下文管理器，确保资源正确释放：
-
+    示例:
         ```python
-        async with ReactAgent(tools=[my_tool]) as agent:
-            response = await agent.get_response("...", session_id="...")
-        # 连接池自动关闭
-        ```
-
-        或者手动调用 close():
-
-        ```python
+        # 基础使用
         agent = ReactAgent(tools=[my_tool])
-        try:
-            response = await agent.get_response("...", session_id="...")
-        finally:
-            await agent.close()
+        response = await agent.get_response("你好", session_id="session-123")
+
+        # 使用异步上下文管理器（推荐）
+        async with ReactAgent(tools=[my_tool]) as agent:
+            response = await agent.get_response("你好", session_id="session-123")
         ```
     """
 
@@ -115,14 +109,6 @@ class ReactAgent:
             tool_count=len(self._tools),
             has_checkpointer=checkpointer is not None,
         )
-
-    async def __aenter__(self) -> "ReactAgent":
-        """异步上下文管理器入口"""
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """异步上下文管理器出口，确保资源释放"""
-        await self.close()
 
     def _default_system_prompt(self) -> str:
         """默认系统提示词"""
@@ -178,8 +164,8 @@ class ReactAgent:
             logger.warning("postgres_checkpointer_init_failed", error=str(e))
             return None
 
-    def _get_graph(self) -> CompiledStateGraph:
-        """获取或创建图
+    async def _ensure_graph(self) -> CompiledStateGraph:
+        """确保图已创建
 
         Returns:
             CompiledStateGraph 实例
@@ -203,20 +189,22 @@ class ReactAgent:
         message: str,
         session_id: str,
         user_id: str | None = None,
+        tenant_id: int | None = None,
     ) -> list[BaseMessage]:
         """获取 Agent 响应
 
         Args:
             message: 用户消息
             session_id: 会话 ID（用于状态持久化）
-            user_id: 用户 ID
+            user_id: 用户 ID（未使用，保持接口兼容）
+            tenant_id: 租户 ID（未使用，保持接口兼容）
 
         Returns:
             响应消息列表
         """
         from langchain_core.messages import HumanMessage
 
-        graph = self._get_graph()
+        graph = await self._ensure_graph()
 
         # 准备输入
         input_data = {"messages": [HumanMessage(content=message)]}
@@ -237,25 +225,27 @@ class ReactAgent:
 
         return result["messages"]
 
-    async def get_stream_response(
+    async def astream(
         self,
         message: str,
         session_id: str,
         user_id: str | None = None,
-    ) -> AsyncIterator[str]:
-        """获取流式响应
+        tenant_id: int | None = None,
+    ) -> AsyncIterator[BaseMessage]:
+        """流式获取 Agent 响应
 
         Args:
             message: 用户消息
             session_id: 会话 ID
-            user_id: 用户 ID
+            user_id: 用户 ID（未使用，保持接口兼容）
+            tenant_id: 租户 ID（未使用，保持接口兼容）
 
         Yields:
-            响应内容片段
+            消息（逐个产出）
         """
         from langchain_core.messages import HumanMessage
 
-        graph = self._get_graph()
+        graph = await self._ensure_graph()
 
         # 准备输入
         input_data = {"messages": [HumanMessage(content=message)]}
@@ -272,15 +262,15 @@ class ReactAgent:
         # 流式调用
         logger.info("react_agent_stream_start", session_id=session_id)
         async for chunk in graph.astream(input_data, config, stream_mode="messages"):
-            if hasattr(chunk, "content") and chunk.content:
-                yield chunk.content
+            if isinstance(chunk, BaseMessage):
+                yield chunk
         logger.info("react_agent_stream_complete", session_id=session_id)
 
-    async def get_chat_history(
+    async def get_session_history(
         self,
         session_id: str,
     ) -> list[BaseMessage]:
-        """获取聊天历史
+        """获取会话历史（实现 BaseAgent 接口）
 
         Args:
             session_id: 会话 ID
@@ -288,7 +278,7 @@ class ReactAgent:
         Returns:
             历史消息列表
         """
-        graph = self._get_graph()
+        graph = await self._ensure_graph()
 
         config = RunnableConfig(
             configurable={"thread_id": session_id},
@@ -301,15 +291,18 @@ class ReactAgent:
 
         return []
 
-    async def clear_chat_history(self, session_id: str) -> None:
-        """清除聊天历史
+    async def clear_session(
+        self,
+        session_id: str,
+    ) -> None:
+        """清除会话历史（实现 BaseAgent 接口）
 
         Args:
             session_id: 会话 ID
         """
         try:
-            if self._connection_pool:
-                async with self._connection_pool.connection() as conn:
+            if ReactAgent._shared_connection_pool:
+                async with ReactAgent._shared_connection_pool.connection() as conn:
                     # 删除检查点数据
                     await conn.execute(
                         "DELETE FROM checkpoints WHERE thread_id = %s",

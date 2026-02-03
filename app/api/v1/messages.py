@@ -1,16 +1,18 @@
 """消息管理 API
 
 提供消息的查询、编辑、删除和搜索功能。
+集成流式对话消息持久化查询功能。
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request as StarletteRequest
 
-from app.middleware import TenantIdDep
 from app.infra.database import get_session
+from app.middleware import TenantIdDep
 from app.models.database import Message
 from app.observability.logging import get_logger
 from app.rate_limit.limiter import RateLimit, limiter
@@ -23,10 +25,25 @@ from app.schemas.message import (
     MessageSearchResponse,
     MessageUpdate,
 )
-from app.services.message_service import MessageService
+from app.services.core.message_service import MessageService
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 logger = get_logger(__name__)
+
+
+class ChatStreamHistoryResponse(BaseModel):
+    """流式对话历史响应"""
+
+    thread_id: str = Field(..., description="线程 ID")
+    messages: list[str] = Field(default_factory=list, description="消息列表")
+    message_count: int = Field(..., description="消息数量")
+
+
+class RecentThreadsResponse(BaseModel):
+    """最近线程响应"""
+
+    threads: list[dict] = Field(default_factory=list, description="线程列表")
+    count: int = Field(..., description="线程数量")
 
 
 def _convert_to_response(message: Message) -> MessageResponse:
@@ -256,3 +273,142 @@ async def load_messages(
         items=items,
         has_more=has_more,
     )
+
+
+@router.get(
+    "/streams/{thread_id}",
+    response_model=ChatStreamHistoryResponse,
+    summary="获取流式对话历史",
+    description="获取指定线程的完整流式消息历史",
+)
+@limiter.limit(RateLimit.API)
+async def get_chat_stream_history(
+    thread_id: str = Query(..., description="线程 ID"),
+) -> ChatStreamHistoryResponse:
+    """获取流式对话历史
+
+    从 chat_streams 表中获取完整对话的持久化消息。
+
+    Args:
+        thread_id: 会话线程 ID
+
+    Returns:
+        流式对话历史
+    """
+    try:
+        from app.agent.graph.chat_stream import get_chat_stream_manager
+
+        manager = await get_chat_stream_manager()
+        messages = await manager.get_chat_history(thread_id)
+
+        if messages is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"线程 {thread_id} 的对话历史不存在",
+            )
+
+        return ChatStreamHistoryResponse(
+            thread_id=thread_id,
+            messages=messages,
+            message_count=len(messages),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "get_chat_stream_history_failed",
+            thread_id=thread_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取对话历史失败",
+        ) from None
+
+
+@router.get(
+    "/streams",
+    response_model=RecentThreadsResponse,
+    summary="列出最近的对话线程",
+    description="获取最近的流式对话线程列表",
+)
+@limiter.limit(RateLimit.API)
+async def list_recent_threads(
+    limit: int = Query(10, ge=1, le=100, description="返回数量限制"),
+) -> RecentThreadsResponse:
+    """列出最近的对话线程
+
+    从 chat_streams 表中获取最近的对话线程。
+
+    Args:
+        limit: 返回数量限制
+
+    Returns:
+        最近线程列表
+    """
+    try:
+        from app.agent.graph.chat_stream import get_chat_stream_manager
+
+        manager = await get_chat_stream_manager()
+        threads = await manager.list_recent_threads(limit)
+
+        return RecentThreadsResponse(
+            threads=threads,
+            count=len(threads),
+        )
+
+    except Exception as e:
+        logger.error(
+            "list_recent_threads_failed",
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取线程列表失败",
+        ) from None
+
+
+@router.delete(
+    "/streams/{thread_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除流式对话历史",
+    description="删除指定线程的流式对话历史",
+)
+@limiter.limit(RateLimit.API)
+async def delete_chat_stream_history(
+    thread_id: str,
+) -> None:
+    """删除流式对话历史
+
+    从 chat_streams 表中删除指定线程的对话历史。
+
+    Args:
+        thread_id: 会话线程 ID
+    """
+    try:
+        from app.agent.graph.chat_stream import get_chat_stream_manager
+
+        manager = await get_chat_stream_manager()
+        success = await manager.delete_chat_history(thread_id)
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"线程 {thread_id} 的对话历史不存在或删除失败",
+            )
+
+        logger.info("chat_stream_history_deleted", thread_id=thread_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "delete_chat_stream_history_failed",
+            thread_id=thread_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="删除对话历史失败",
+        ) from None

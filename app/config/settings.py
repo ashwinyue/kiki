@@ -219,6 +219,12 @@ class Settings(BaseSettings):
     # Agent 重试最大间隔（秒）
     agent_retry_max_interval: float = 60.0
 
+    # ========== 流式消息持久化配置 ==========
+    # 是否启用流式消息持久化
+    chat_stream_checkpoint_saver: bool = True
+    # 流式消息过期天数（用于清理）
+    chat_stream_retention_days: int = 30
+
     # ========== RAG / Embedding 配置 ==========
     # Embedding 提供商: openai, dashscope, voyage, ollama
     embedding_provider: Literal["openai", "dashscope", "voyage", "ollama"] = "openai"

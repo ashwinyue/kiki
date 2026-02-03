@@ -28,7 +28,6 @@ if tracker.check_budget("gpt-4o", estimated_tokens=1000):
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal

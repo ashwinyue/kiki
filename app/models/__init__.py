@@ -1,91 +1,47 @@
 """数据模型定义（SQLModel）
 
-对齐 WeKnora99 表结构
+Multi-Agent 架构支持，对齐 LangGraph 最佳实践。
 """
 
+# ============== 基础 Mixin ==============
+from app.models.timestamp import TimestampMixin
+
 # ============== 用户认证 ==============
-from app.models.user import (
-    User,
-    UserCreate,
-    UserPublic,
-    UserUpdate,
-    hash_password,
-    verify_password,
-)
 from app.models.auth_token import (
     AuthToken,
     AuthTokenCreate,
     AuthTokenPublic,
 )
 
-# ============== 租户 ==============
-from app.models.tenant import (
-    Tenant,
-    TenantCreate,
-    TenantPublic,
-    TenantUpdate,
-)
-
-# ============== 会话 ==============
-from app.models.memory import (
-    Memory,
-    MemoryCreate,
-    MemoryPublic,
-    MemoryUpdate,
-)
-from app.models.session import (
-    ChatSession,
-    Session,
-    SessionCreate,
-    SessionPublic,
-    SessionUpdate,
-)
-from app.models.thread import (
-    Thread,
-    ThreadCreate,
-    ThreadPublic,
-)
-
-# ============== 消息 ==============
-from app.models.message import (
-    Message,
-    MessageCreate,
-    MessagePublic,
-    MessageUpdate,
-)
-
-# ============== 知识库 ==============
-from app.models.knowledge import (
-    # Model
-    Model,
-    ModelCreate,
-    # KnowledgeBase
-    KnowledgeBase,
-    KnowledgeBaseCreate,
-    # Knowledge
-    Knowledge,
-    KnowledgeCreate,
-    # Chunk
-    Chunk,
-    ChunkCreate,
-    # Embedding
-    Embedding,
-    EmbeddingBase,
-    # KnowledgeTag
-    KnowledgeTag,
-    KnowledgeTagCreate,
-)
-
 # ============== Agent ==============
+from app.models.agent_execution import (
+    AgentExecution,
+    AgentExecutionBase,
+    AgentExecutionCreate,
+    AgentExecutionPublic,
+    AgentExecutionUpdate,
+    AgentType,
+    ExecutionStatus,
+)
 from app.models.custom_agent import (
     Agent,
     AgentCreate,
     AgentPublic,
+    AgentRole,
     AgentUpdate,
     CustomAgent,
     CustomAgentCreate,
     CustomAgentPublic,
     CustomAgentUpdate,
+    GraphType,
+)
+
+# ============== LLM 模型 ==============
+from app.models.llm_model import (
+    Model,
+    ModelBase,
+    ModelCreate,
+    ModelUpdate,
 )
 
 # ============== MCP 服务 ==============
@@ -96,7 +52,53 @@ from app.models.mcp_service import (
     MCPServiceUpdate,
 )
 
+# ============== 会话 ==============
+from app.models.memory import (
+    Memory,
+    MemoryCreate,
+    MemoryPublic,
+    MemoryUpdate,
+)
+
+# ============== 消息 ==============
+from app.models.message import (
+    Message,
+    MessageCreate,
+    MessagePublic,
+    MessageUpdate,
+)
+from app.models.session import (
+    ChatSession,
+    Session,
+    SessionCreate,
+    SessionPublic,
+    SessionUpdate,
+)
+
+# ============== 租户 ==============
+from app.models.tenant import (
+    Tenant,
+    TenantCreate,
+    TenantPublic,
+    TenantUpdate,
+)
+from app.models.thread import (
+    Thread,
+    ThreadCreate,
+    ThreadPublic,
+)
+from app.models.user import (
+    User,
+    UserCreate,
+    UserPublic,
+    UserUpdate,
+    hash_password,
+    verify_password,
+)
+
 __all__ = [
+    # 基础 Mixin
+    "TimestampMixin",
     # 用户认证
     "User",
     "UserCreate",
@@ -132,27 +134,25 @@ __all__ = [
     "MessageCreate",
     "MessageUpdate",
     "MessagePublic",
-    # 知识库
-    "Model",
-    "ModelCreate",
-    "KnowledgeBase",
-    "KnowledgeBaseCreate",
-    "Knowledge",
-    "KnowledgeCreate",
-    "Chunk",
-    "ChunkCreate",
-    "Embedding",
-    "KnowledgeTag",
-    "KnowledgeTagCreate",
     # Agent
     "Agent",
     "AgentCreate",
     "AgentUpdate",
     "AgentPublic",
+    "AgentRole",
+    "GraphType",
     "CustomAgent",
     "CustomAgentCreate",
     "CustomAgentUpdate",
     "CustomAgentPublic",
+    # Agent Execution
+    "AgentExecution",
+    "AgentExecutionBase",
+    "AgentExecutionCreate",
+    "AgentExecutionUpdate",
+    "AgentExecutionPublic",
+    "AgentType",
+    "ExecutionStatus",
     # MCP 服务
     "MCPService",
     "MCPServiceCreate",

@@ -5,12 +5,21 @@
 
 from app.infra.cache import (
     CachePenetrationProtection,
+    CacheStats,
     DistributedLock,
+    L1MemoryCache,
+    MultiLayerCache,
     RedisCache,
-    cached,
+    SemanticCache,
+    TenantCache,
     cache_instance,
+    cached,
     distributed_lock,
     get_cache,
+    get_cache_stats,
+    get_multilayer_cache,
+    get_semantic_cache,
+    get_tenant_cache,
     penetration_protection,
     warmup_cache,
 )
@@ -23,18 +32,28 @@ from app.infra.database import (
     init_db,
 )
 from app.infra.redis import close_redis, get_redis, ping
-from app.infra.search import SearchEngine, get_search_engine, with_web_search
+
+# Search 模块已移除（RAG 相关）
 
 __all__ = [
     # Cache
     "RedisCache",
+    "MultiLayerCache",
+    "L1MemoryCache",
+    "SemanticCache",
+    "TenantCache",
     "DistributedLock",
     "CachePenetrationProtection",
+    "CacheStats",
     "cached",
     "cache_instance",
     "distributed_lock",
     "penetration_protection",
     "get_cache",
+    "get_multilayer_cache",
+    "get_semantic_cache",
+    "get_tenant_cache",
+    "get_cache_stats",
     "warmup_cache",
     # Database
     "AsyncSession",
@@ -47,8 +66,4 @@ __all__ = [
     "close_redis",
     "get_redis",
     "ping",
-    # Search
-    "SearchEngine",
-    "get_search_engine",
-    "with_web_search",
 ]

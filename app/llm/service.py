@@ -2,6 +2,8 @@
 
 提供 LLM 调用、重试和循环回退容错。
 使用 LangChain 内置的 with_retry 方法替代手动重试。
+
+额外提供 tenacity 装饰器选项用于自定义重试策略。
 """
 
 from collections.abc import AsyncIterator
@@ -9,21 +11,24 @@ from typing import Any, TypeVar
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
-from langchain_core.outputs import LLMResult
 from openai import APIError, APITimeoutError, OpenAIError, RateLimitError
 from pydantic import BaseModel
 
 from app.config.settings import get_settings
 from app.llm.registry import LLMRegistry
 from app.observability.logging import get_logger
+from app.utils.retry_decorators import (
+    RetryableError,
+    create_llm_retry_decorator,
+)
 
 # 尝试导入多模型路由系统（可选依赖）
 try:
-    from app.llm_providers import (
+    from app.llm.providers import (
         LLMPriority,
         LLMProviderError,
     )
-    from app.llm_providers import (
+    from app.llm.providers import (
         get_llm_for_task as get_llm_for_task_providers,
     )
 
@@ -266,6 +271,64 @@ class LLMService:
 
         # 所有模型都失败了
         raise RuntimeError(f"LLM 调用失败，已尝试 {models_tried} 个模型。最后错误: {last_error}")
+
+    async def call_with_tenacity_retry(
+        self,
+        messages: list[BaseMessage],
+        model_name: str | None = None,
+        max_attempts: int = 3,
+        **kwargs,
+    ) -> BaseMessage:
+        """使用 tenacity 装饰器的 LLM 调用方法
+
+        这是使用 tenacity 重试装饰器的示例方法。
+        与 call() 方法的区别：
+        - call(): 使用 LangChain 的 with_retry（推荐用于 LangChain 集成）
+        - call_with_tenacity_retry(): 使用 tenacity 装饰器（更灵活的自定义重试）
+
+        Args:
+            messages: 消息列表
+            model_name: 指定模型名称（可选）
+            max_attempts: 最大重试次数
+            **kwargs: 模型参数覆盖
+
+        Returns:
+            LLM 响应消息
+
+        Raises:
+            RuntimeError: 所有重试失败
+
+        Examples:
+            ```python
+            # 使用 tenacity 重试
+            response = await llm_service.call_with_tenacity_retry(
+                messages=[HumanMessage(content="Hello")],
+                max_attempts=5,
+            )
+            ```
+        """
+        # 创建带重试的内部调用函数
+        @create_llm_retry_decorator(max_attempts=max_attempts)
+        async def _do_call() -> BaseMessage:
+            if not self._llm:
+                raise RuntimeError("LLM 未初始化")
+            return await self._llm.ainvoke(messages, **kwargs)
+
+        try:
+            return await _do_call()
+        except Exception as e:
+            # 转换为 RetryableError 以支持自定义重试时间
+            if isinstance(e, RateLimitError):
+                raise RetryableError(
+                    f"API 速率限制: {e}",
+                    retry_after=5.0,  # 5 秒后重试
+                ) from e
+            if isinstance(e, APITimeoutError):
+                raise RetryableError(
+                    f"API 超时: {e}",
+                    retry_after=2.0,  # 2 秒后重试
+                ) from e
+            raise
 
     def bind_tools(self, tools: list[Any]) -> "LLMService":
         """绑定工具到当前 LLM

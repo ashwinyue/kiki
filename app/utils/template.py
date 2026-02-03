@@ -12,7 +12,6 @@ from jinja2 import (
     BaseLoader,
     Environment,
     StrictUndefined,
-    TemplateSyntaxError,
     TemplateError,
 )
 

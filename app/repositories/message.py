@@ -4,9 +4,8 @@
 """
 
 from datetime import datetime
-from typing import Any
 
-from sqlalchemy import and_, desc, select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import Message, MessageCreate
@@ -227,17 +226,14 @@ class MessageRepository(BaseRepository[Message]):
             消息列表（按创建时间升序排列）
         """
         try:
-            # 获取锚点消息的创建时间
             before_time: datetime | None = None
             if before_message_id:
                 anchor_message = await self.get(before_message_id)
                 if anchor_message and anchor_message.session_id == session_id:
                     before_time = anchor_message.created_at
 
-            # 构建查询
             statement = select(Message).where(Message.session_id == session_id)
 
-            # 添加时间过滤条件
             if before_time is not None:
                 statement = statement.where(Message.created_at < before_time)
 

@@ -3,6 +3,8 @@
 创建 FastAPI 应用并配置所有组件。
 """
 
+import asyncio
+import signal
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -10,18 +12,17 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from starlette.middleware.gzip import GZipMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
 # 加载 .env 文件（必须在导入 app 模块之前执行）
 load_dotenv()
 from fastapi.responses import JSONResponse
 from starlette.requests import Request as StarletteRequest
 
-from app.config.settings import get_settings
 from app.config.errors import classify_error, get_user_friendly_message
-from app.rate_limit.limiter import RateLimit, limiter, rate_limit_exceeded_handler
+from app.config.settings import get_settings
 from app.middleware import (
     MaxRequestSizeMiddleware,
     ObservabilityMiddleware,
@@ -30,6 +31,7 @@ from app.middleware import (
     TenantMiddleware,
 )
 from app.observability.logging import configure_logging, get_logger
+from app.rate_limit.limiter import RateLimit, limiter, rate_limit_exceeded_handler
 
 # 获取配置
 settings = get_settings()
@@ -43,10 +45,39 @@ configure_logging(
 
 logger = get_logger(__name__)
 
+# 优雅关闭配置
+SHUTDOWN_TIMEOUT = 30  # 关闭超时时间（秒）
+_shutdown_event = asyncio.Event()
+
+
+def _signal_handler(signum: int, frame) -> None:
+    """信号处理器
+
+    处理 SIGTERM (15) 和 SIGINT (2) 信号，触发优雅关闭。
+
+    Args:
+        signum: 信号编号
+        frame: 当前栈帧
+    """
+    logger.info(
+        "signal_received",
+        signal_name=signal.Signals(signum).name,
+        signal_number=signum,
+    )
+    _shutdown_event.set()
+
+
+# 注册信号处理器
+signal.signal(signal.SIGTERM, _signal_handler)
+signal.signal(signal.SIGINT, _signal_handler)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """应用生命周期管理"""
+    """应用生命周期管理
+
+    处理应用启动和关闭时的资源管理，实现优雅关闭。
+    """
     logger.info(
         "app_starting",
         app_name=settings.app_name,
@@ -55,36 +86,65 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     # 启动时初始化
-    # 1. 初始化 LLM 服务（延迟加载，在首次使用时初始化）
-    # from app.llm import get_llm_service
-    # llm_service = get_llm_service()
+    # 注意：数据库连接池由 SQLAlchemy 异步引擎自动管理
+    # LLM 服务和 Agent 采用延迟加载，在首次使用时初始化
 
-    # 2. 初始化检查点保存器（延迟加载，在 Agent 中初始化）
-
-    # 3. 初始化 Langfuse 客户端（如果配置了）
-    # if settings.langfuse_public_key and settings.langfuse_secret_key:
-    #     from langfuse import Langfuse
-    #     langfuse = Langfuse(
-    #         public_key=settings.langfuse_public_key,
-    #         secret_key=settings.langfuse_secret_key,
-    #         host=settings.langfuse_host,
-    #     )
-    #     logger.info("langfuse_initialized")
+    logger.info("app_started", startup_checks="passed")
 
     yield
 
-    # 关闭时清理
-    logger.info("app_shutting_down")
+    # ========== 关闭时清理 ==========
+    logger.info("app_shutting_down", timeout=SHUTDOWN_TIMEOUT)
 
-    # 关闭 Redis 连接池
-    from app.infra.redis import close_redis
+    # 创建清理任务列表
+    cleanup_tasks = []
 
-    await close_redis()
+    # 1. 关闭 Redis 连接池
+    async def close_redis_pool():
+        try:
+            from app.infra.redis import close_redis
 
-    # 关闭 Agent
-    # from app.agent import get_agent
-    # agent = await get_agent()
-    # await agent.close()
+            await close_redis()
+            logger.info("redis_closed")
+        except Exception as e:
+            logger.error("redis_close_failed", error=str(e))
+
+    cleanup_tasks.append(close_redis_pool())
+
+    # 2. 关闭 LangGraph Checkpointer
+    async def close_checkpointer():
+        try:
+            from app.agent.graph.checkpoint import close_postgres_checkpointer
+
+            await close_postgres_checkpointer()
+            logger.info("checkpointer_closed")
+        except Exception as e:
+            logger.error("checkpointer_close_failed", error=str(e))
+
+    cleanup_tasks.append(close_checkpointer())
+
+    # 3. 关闭数据库连接池
+    async def close_database_pool():
+        try:
+            from app.infra.database import dispose_engine
+
+            await dispose_engine()
+            logger.info("database_closed")
+        except Exception as e:
+            logger.error("database_close_failed", error=str(e))
+
+    cleanup_tasks.append(close_database_pool())
+
+    # 3. 等待所有清理任务完成（带超时）
+    try:
+        await asyncio.wait_for(asyncio.gather(*cleanup_tasks, return_exceptions=True), timeout=SHUTDOWN_TIMEOUT)
+        logger.info("cleanup_completed")
+    except asyncio.TimeoutError:
+        logger.warning("cleanup_timeout", timeout=SHUTDOWN_TIMEOUT)
+    except Exception as e:
+        logger.error("cleanup_failed", error=str(e))
+
+    logger.info("app_shutdown_complete")
 
 
 def create_app() -> FastAPI:
@@ -160,28 +220,84 @@ def _register_routes(app: FastAPI) -> None:
     @app.get("/health")
     @limiter.limit(RateLimit.HEALTH)
     async def health_check(request: StarletteRequest):
-        """健康检查
+        """健康检查（深度检查）
 
-        检查应用状态和依赖服务（Redis）的健康状态。
+        检查应用状态和所有依赖服务的健康状态：
+        - Redis（缓存）
+        - PostgreSQL（数据库）
+        - LLM 服务（可选）
         """
-        from app.infra.redis import ping as redis_ping
-
         checks = {
             "app": "healthy",
             "version": settings.app_version,
+            "timestamp": None,
         }
 
-        # 检查 Redis 连接
-        redis_status = await redis_ping()
-        checks["redis"] = "healthy" if redis_status else "unhealthy"
+        # 获取当前时间
+        from datetime import UTC, datetime
 
-        # 如果有依赖服务不健康，整体状态为 degraded
-        if not redis_status:
+        checks["timestamp"] = datetime.now(UTC).isoformat()
+
+        # 1. 检查 Redis 连接
+        try:
+            from app.infra.redis import ping as redis_ping
+
+            redis_status = await redis_ping()
+            checks["redis"] = "healthy" if redis_status else "unhealthy"
+        except Exception as e:
+            logger.error("redis_health_check_failed", error=str(e))
+            checks["redis"] = "error"
+
+        # 2. 检查 PostgreSQL 数据库连接
+        try:
+            from app.infra.database import check_database_health
+
+            db_status = await check_database_health()
+            checks["database"] = "healthy" if db_status else "unhealthy"
+        except Exception as e:
+            logger.error("database_health_check_failed", error=str(e))
+            checks["database"] = "error"
+
+        # 3. 计算整体健康状态
+        # 所有服务都健康 → healthy
+        # 有服务不健康但没有错误 → degraded
+        # 有服务错误 → unhealthy
+        service_statuses = [
+            checks.get("redis"),
+            checks.get("database"),
+        ]
+
+        if "error" in service_statuses:
+            checks["status"] = "unhealthy"
+        elif "unhealthy" in service_statuses:
             checks["status"] = "degraded"
         else:
             checks["status"] = "healthy"
 
         return checks
+
+    @app.get("/health/ready")
+    @limiter.limit(RateLimit.HEALTH)
+    async def readiness_check(request: StarletteRequest):
+        """就绪检查（浅度检查）
+
+        仅检查应用本身是否就绪，不检查依赖服务。
+        用于 Kubernetes readiness probe。
+        """
+        return {
+            "ready": True,
+            "version": settings.app_version,
+        }
+
+    @app.get("/health/live")
+    @limiter.limit(RateLimit.HEALTH)
+    async def liveness_check(request: StarletteRequest):
+        """存活检查
+
+        仅检查应用是否存活，最简单的端点。
+        用于 Kubernetes liveness probe。
+        """
+        return {"alive": True}
 
     @app.get("/")
     @limiter.limit(RateLimit.API)

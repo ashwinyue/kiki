@@ -10,9 +10,9 @@ from fastapi import Depends, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from app.auth.tenant_api_key import extract_tenant_id_from_api_key
 from app.auth.jwt import verify_token
-from app.auth.tenant import TenantContext, set_tenant_context, clear_tenant_context
+from app.auth.tenant import TenantContext, clear_tenant_context, set_tenant_context
+from app.auth.tenant_api_key import extract_tenant_id_from_api_key
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -148,7 +148,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
     async def _handle_jwt_auth(self, request: Request, payload: dict) -> bool:
         """处理 JWT Token 认证"""
         from app.infra.database import session_scope
-        from app.models.database import User, Tenant
+        from app.models.database import Tenant, User
 
         user_id = payload.get("sub")
         if not user_id:

@@ -22,13 +22,13 @@
 """
 
 from collections.abc import AsyncIterator
-from typing import Annotated, TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent import LangGraphAgent
-from app.api.dependencies import get_db, get_tenant_id
+from app.agent import ChatAgent  # 使用 ChatAgent 替代已废弃的 LangGraphAgent
+from app.api.dependencies import get_db
 from app.config.dependencies import (
     get_agent_dep,
     get_context_manager_dep,
@@ -36,23 +36,19 @@ from app.config.dependencies import (
     get_memory_manager_dep,
 )
 from app.middleware.auth import (
-    get_current_user_dep,
     get_current_tenant_id,
+    get_current_user_dep,
     require_current_user,
     require_tenant,
 )
 from app.observability.logging import get_logger
 
 if TYPE_CHECKING:
-    from app.agent.memory.manager import MemoryManager
     from app.agent.memory.context import ContextManager
+    from app.agent.memory.manager import MemoryManager
     from app.llm import LLMService
 
 logger = get_logger(__name__)
-
-# ============== 类型别名 ==============
-# 使用类型别名简化依赖注入，提高代码可读性
-
 
 # 数据库会话依赖
 DbDep = Annotated[AsyncSession, Depends(get_db)]
@@ -70,7 +66,7 @@ UserIdDep = Annotated[str | None, Depends(get_current_user_dep)]
 RequiredUserIdDep = Annotated[str, Depends(require_current_user)]
 
 # Agent 依赖
-AgentDep = Annotated[LangGraphAgent, Depends(get_agent_dep)]
+AgentDep = Annotated[ChatAgent, Depends(get_agent_dep)]
 
 # LLM 服务依赖
 LlmServiceDep = Annotated["LLMService", Depends(get_llm_service_dep)]
@@ -78,8 +74,8 @@ LlmServiceDep = Annotated["LLMService", Depends(get_llm_service_dep)]
 # Memory Manager 依赖
 MemoryManagerDep = Annotated["MemoryManager", Depends(get_memory_manager_dep)]
 
-# Context Manager 依赖
-ContextManagerDep = Annotated["ContextManager", Depends(get_context_manager_dep)]
+# Context Manager 依赖（已废弃，Agent 现在使用 PostgreSQL Checkpointer）
+# ContextManagerDep = Annotated["ContextManager", Depends(get_context_manager_dep)]
 
 
 # ============== 链式依赖注入函数 ==============
@@ -99,7 +95,7 @@ async def get_session_service_dep(
     Yields:
         SessionService 实例
     """
-    from app.services.session_service import SessionService
+    from app.services.core.session_service import SessionService
 
     service = SessionService(db)
     try:
@@ -113,7 +109,7 @@ async def get_agent_with_memory_dep(
     tenant_id: TenantIdDep,
     user_id: UserIdDep,
     session_id: str | None = None,
-) -> AsyncIterator[LangGraphAgent]:
+) -> AsyncIterator[ChatAgent]:
     """获取带记忆的 Agent（链式依赖注入）
 
     依赖: db + tenant_id + user_id → Agent
@@ -125,7 +121,7 @@ async def get_agent_with_memory_dep(
         session_id: 会话 ID（可选）
 
     Yields:
-        LangGraphAgent 实例
+        ChatAgent 实例
     """
     agent = await get_agent_dep(session_id, user_id)
     try:
@@ -138,10 +134,10 @@ async def get_agent_with_memory_dep(
 async def get_chat_graph_dep(
     system_prompt: str | None = None,
     llm_service: LlmServiceDep = None,
-) -> "ChatGraph":
+) -> "CompiledStateGraph":
     """获取聊天图（链式依赖注入）
 
-    依赖: llm_service → ChatGraph
+    依赖: llm_service → CompiledStateGraph
 
     Args:
         system_prompt: 系统提示词
@@ -150,6 +146,7 @@ async def get_chat_graph_dep(
     Returns:
         编译后的聊天图
     """
+
     from app.agent.graph.builder import build_chat_graph
 
     # 这里可以添加缓存逻辑
@@ -165,6 +162,8 @@ async def get_knowledge_service_dep(
 ) -> AsyncIterator["KnowledgeService"]:
     """获取知识库服务（链式依赖注入）
 
+    ⚠️ 已废弃：知识库相关模块已移除
+
     依赖: db + tenant_id → KnowledgeService
 
     Args:
@@ -173,14 +172,11 @@ async def get_knowledge_service_dep(
 
     Yields:
         KnowledgeService 实例
-    """
-    from app.services.knowledge_service import KnowledgeService
 
-    service = KnowledgeService(db, tenant_id)
-    try:
-        yield service
-    finally:
-        pass
+    Raises:
+        NotImplementedError: 此服务已移除
+    """
+    raise NotImplementedError("KnowledgeService 已移除（RAG 相关功能已删除）")
 
 
 async def get_model_service_dep(
@@ -198,7 +194,7 @@ async def get_model_service_dep(
     Yields:
         ModelService 实例
     """
-    from app.services.model_service import ModelService
+    from app.services.llm.model_service import ModelService
 
     service = ModelService(db, tenant_id)
     try:
@@ -213,6 +209,8 @@ async def get_task_service_dep(
 ) -> AsyncIterator["TaskService"]:
     """获取任务服务（链式依赖注入）
 
+    ⚠️ 已废弃：Celery 任务队列模块已移除
+
     依赖: db + tenant_id → TaskService
 
     Args:
@@ -221,14 +219,11 @@ async def get_task_service_dep(
 
     Yields:
         TaskService 实例
-    """
-    from app.services.task_service import TaskService
 
-    service = TaskService(db, tenant_id)
-    try:
-        yield service
-    finally:
-        pass
+    Raises:
+        NotImplementedError: 此服务已移除
+    """
+    raise NotImplementedError("TaskService 已移除（Celery 任务队列已删除）")
 
 
 # ============== 辅助函数 ==============
@@ -251,7 +246,7 @@ async def validate_session_access_dep(
     Raises:
         HTTPException: 会话不存在或无权访问
     """
-    from app.services.session_service import SessionService
+    from app.services.core.session_service import SessionService
 
     service = SessionService(db)
     await service.validate_session_access(
@@ -276,7 +271,7 @@ async def resolve_effective_user_id_dep(
     Returns:
         有效的用户 ID（匿名用户生成临时 ID）
     """
-    from app.services.session_service import resolve_effective_user_id
+    from app.services.core.session_service import resolve_effective_user_id
 
     return resolve_effective_user_id(user_id, tenant_id)
 

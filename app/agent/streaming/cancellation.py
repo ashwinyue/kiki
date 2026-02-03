@@ -240,14 +240,14 @@ class CancellableStreamProcessor:
         self,
         input_data: dict[str, Any],
         config: RunnableConfig,
-        version: str = "v1",
+        version: str = "v2",
     ) -> AsyncIterator[dict[str, Any]]:
         """流式输出 LangGraph 事件（可取消）
 
         Args:
             input_data: 输入数据
             config: 运行配置
-            version: LangGraph 事件版本
+            version: LangGraph 事件版本 (v1, v2, v2_patches)
 
         Yields:
             LangGraph 事件字典

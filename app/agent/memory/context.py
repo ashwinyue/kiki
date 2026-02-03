@@ -62,9 +62,6 @@ except ImportError:
     logger.warning("orjson_not_available, using_standard_json")
 
 
-# ============== 数据模型 ==============
-
-
 class ChatMessage(BaseModel):
     """聊天消息模型"""
 
