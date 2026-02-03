@@ -33,26 +33,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         response = await call_next(request)
 
-        # X-Content-Type-Options: 防止浏览器 MIME 嗅探
         response.headers["X-Content-Type-Options"] = "nosniff"
 
-        # X-Frame-Options: 防止点击劫持
         response.headers["X-Frame-Options"] = "DENY"
 
-        # X-XSS-Protection: 启用浏览器 XSS 过滤器
         response.headers["X-XSS-Protection"] = "1; mode=block"
 
-        # Referrer-Policy: 控制 Referer 头信息泄露
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
-        # Permissions-Policy: 控制浏览器功能/权限
         response.headers["Permissions-Policy"] = (
             "geolocation=(), microphone=(), camera=()"
         )
 
-        # 仅 HTTPS 时设置 HSTS
         if request.url.scheme == "https":
-            # max-age=31536000 (1年) + includeSubDomains + preload
             response.headers[
                 "Strict-Transport-Security"
             ] = "max-age=31536000; includeSubDomains; preload"
@@ -75,7 +68,6 @@ class MaxRequestSizeMiddleware(BaseHTTPMiddleware):
         self.max_size = max_size
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # 检查 Content-Length
         content_length = request.headers.get("content-length")
         if content_length:
             try:
