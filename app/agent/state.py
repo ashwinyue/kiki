@@ -6,6 +6,7 @@
 - 使用 TypedDict 定义状态结构
 - 使用 Annotated 和 add_messages reducer 管理消息
 - 支持自定义 reducer 控制状态更新行为
+- 使用 Pydantic 模型进行状态验证（可选）
 """
 
 from typing import Any, Literal
@@ -15,9 +16,18 @@ from langgraph.graph import MessagesState
 from langgraph.graph.message import add_messages
 from typing_extensions import Annotated, TypedDict
 
+from app.agent.state_models import (
+    ChatStateModel,
+    StateValidator,
+    increment_iteration_validated,
+    validate_state_update,
+)
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
+
+# 全局配置：是否启用 Pydantic 验证
+ENABLE_STATE_VALIDATION = True
 
 
 # ============== 状态定义 ==============
@@ -117,6 +127,7 @@ def create_chat_state(
     user_id: str | None = None,
     session_id: str = "",
     tenant_id: int | None = None,
+    validate: bool | None = None,
 ) -> ChatState:
     """创建聊天状态
 
@@ -125,19 +136,38 @@ def create_chat_state(
         user_id: 用户 ID
         session_id: 会话 ID
         tenant_id: 租户 ID
+        validate: 是否启用 Pydantic 验证（默认使用全局配置）
 
     Returns:
         ChatState 实例
+
+    Raises:
+        ValueError: 验证失败时（当 validate=True 时）
     """
-    return ChatState(
-        messages=messages or [],
-        user_id=user_id,
-        session_id=session_id,
-        tenant_id=tenant_id,
-        iteration_count=0,
-        max_iterations=10,
-        error=None,
-    )
+    # 构建状态数据
+    state_data = {
+        "messages": messages or [],
+        "user_id": user_id,
+        "session_id": session_id,
+        "tenant_id": tenant_id,
+        "iteration_count": 0,
+        "max_iterations": 10,
+        "error": None,
+    }
+
+    # 根据配置决定是否验证
+    should_validate = validate if validate is not None else ENABLE_STATE_VALIDATION
+
+    if should_validate:
+        try:
+            validated_data = StateValidator.validate_chat_state(state_data)
+            return ChatState(**validated_data)
+        except Exception as e:
+            logger.warning("chat_state_creation_failed", error=str(e))
+            # 验证失败时返回未验证的状态（向后兼容）
+            return ChatState(**state_data)
+
+    return ChatState(**state_data)
 
 
 def create_agent_state(
@@ -228,7 +258,7 @@ def create_state_from_input(
 
 
 def increment_iteration(state: dict[str, Any]) -> dict[str, Any]:
-    """增加迭代计数
+    """增加迭代计数（带验证）
 
     Args:
         state: 当前状态
@@ -236,6 +266,9 @@ def increment_iteration(state: dict[str, Any]) -> dict[str, Any]:
     Returns:
         更新后的状态增量
     """
+    if ENABLE_STATE_VALIDATION:
+        return increment_iteration_validated(state)
+
     current = state.get("iteration_count", 0)
     return {"iteration_count": current + 1}
 

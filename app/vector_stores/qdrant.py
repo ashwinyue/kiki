@@ -5,9 +5,13 @@
 
 依赖安装:
     uv add qdrant-client
+
+采用单例模式管理 Qdrant 客户端，确保连接复用和资源高效利用。
+参考外部项目的 MultiTenantVectorStore 单例设计模式。
 """
 
 from dataclasses import dataclass
+from threading import Lock
 from typing import Any
 
 from langchain_core.documents import Document
@@ -50,6 +54,133 @@ class QdrantConfig(VectorStoreConfig):
     timeout: int = 60
 
 
+# ============== Qdrant 客户端单例管理器 ==============
+
+
+class QdrantClientSingleton:
+    """Qdrant 客户端单例管理器
+
+    采用线程安全的单例模式，确保全局只有一个 Qdrant 客户端实例。
+
+    设计模式参考：
+    - 外部项目的 MultiTenantVectorStore 单例模式
+    - 懒初始化 + 线程安全 + 自动清理
+
+    使用示例:
+        ```python
+        client = QdrantClientSingleton()
+        qdrant_client = await client.get_client(config)
+        ```
+    """
+
+    _instance = None
+    _lock = Lock()
+    _initialized = False
+
+    def __new__(cls):
+        """线程安全的单例实现"""
+        if cls._instance is None:
+            with cls._lock:
+                # 双重检查锁定
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        """懒初始化客户端管理器"""
+        if self._initialized:
+            return
+
+        self._clients: dict[str, Any] = {}  # 支持多个配置的客户端
+        self._lock = Lock()  # 客户端字典的锁
+        self._initialized = True
+
+        logger.debug("qdrant_client_singleton_created")
+
+    async def get_client(self, config: QdrantConfig) -> Any:
+        """获取 Qdrant 客户端（单例）
+
+        Args:
+            config: Qdrant 配置
+
+        Returns:
+            AsyncQdrantClient 实例
+
+        Raises:
+            ImportError: qdrant-client 未安装
+        """
+        try:
+            from qdrant_client import AsyncQdrantClient
+        except ImportError as e:
+            logger.error("qdrant_client_not_installed")
+            raise ImportError(
+                "请安装 qdrant-client: uv add qdrant-client"
+            ) from e
+
+        # 生成配置的唯一键（支持多个配置的客户端）
+        config_key = f"{config.location}:{config.url}:{config.port}:{config.path}"
+
+        if config_key not in self._clients:
+            with self._lock:
+                # 双重检查锁定
+                if config_key not in self._clients:
+                    # 创建客户端
+                    if config.location == "cloud":
+                        if not config.url or not config.api_key:
+                            raise ValueError("Cloud mode requires url and api_key")
+
+                        client = AsyncQdrantClient(
+                            url=config.url,
+                            api_key=config.api_key,
+                            timeout=config.timeout,
+                        )
+                    else:
+                        client = AsyncQdrantClient(
+                            path=config.path,
+                            port=config.port,
+                            timeout=config.timeout,
+                        )
+
+                    self._clients[config_key] = client
+                    logger.info(
+                        "qdrant_client_created",
+                        location=config.location,
+                        config_key=config_key,
+                    )
+
+        return self._clients[config_key]
+
+    async def close_client(self, config: QdrantConfig) -> None:
+        """关闭指定配置的客户端
+
+        Args:
+            config: Qdrant 配置
+        """
+        config_key = f"{config.location}:{config.url}:{config.port}:{config.path}"
+
+        if config_key in self._clients:
+            with self._lock:
+                if config_key in self._clients:
+                    # Qdrant 客户端没有显式的 close 方法
+                    # 只需要从字典中移除引用
+                    del self._clients[config_key]
+                    logger.info("qdrant_client_closed", config_key=config_key)
+
+    async def close_all(self) -> None:
+        """关闭所有客户端
+
+        应用关闭时调用，释放资源。
+        """
+        with self._lock:
+            self._clients.clear()
+            logger.info("all_qdrant_clients_closed")
+
+
+# 全局客户端单例实例
+_qdrant_client_singleton = QdrantClientSingleton()
+
+
 class QdrantVectorStore(BaseVectorStore):
     """Qdrant 向量存储
 
@@ -72,27 +203,14 @@ class QdrantVectorStore(BaseVectorStore):
         self._client: Any = None
 
     async def initialize(self) -> None:
-        """初始化 Qdrant 客户端"""
+        """初始化 Qdrant 客户端（使用单例）"""
         try:
-            from qdrant_client import AsyncQdrantClient
             from qdrant_client.models import VectorParams
 
-            # 创建客户端
-            if self.qdrant_config.location == "cloud":
-                if not self.qdrant_config.url or not self.qdrant_config.api_key:
-                    raise ValueError("Cloud mode requires url and api_key")
-
-                self._client = AsyncQdrantClient(
-                    url=self.qdrant_config.url,
-                    api_key=self.qdrant_config.api_key,
-                    timeout=self.qdrant_config.timeout,
-                )
-            else:
-                self._client = AsyncQdrantClient(
-                    path=self.qdrant_config.path,
-                    port=self.qdrant_config.port,
-                    timeout=self.qdrant_config.timeout,
-                )
+            # 使用单例客户端
+            self._client = await _qdrant_client_singleton.get_client(
+                self.qdrant_config
+            )
 
             # 检查/创建集合
             collections = await self._client.get_collections()
