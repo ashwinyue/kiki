@@ -16,6 +16,10 @@ from app.middleware.auth import (
     TenantContextDep,
     get_tenant_context_dep,
     get_tenant_id,
+    # 新增：用户认证依赖
+    get_current_user_dep,
+    require_current_user,
+    get_current_tenant_id,
 )
 from app.middleware.observability import (
     ObservabilityMiddleware,
@@ -37,6 +41,10 @@ __all__ = [
     "TenantContextDep",
     "get_tenant_context_dep",
     "get_tenant_id",
+    # 新增
+    "get_current_user_dep",
+    "require_current_user",
+    "get_current_tenant_id",
     # Observability
     "ObservabilityMiddleware",
     "RequestContextMiddleware",

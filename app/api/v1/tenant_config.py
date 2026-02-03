@@ -1,20 +1,27 @@
 """租户 KV 配置 API 路由
 
 对齐 WeKnora99 租户配置管理 API
+使用 FastAPI 标准依赖注入模式。
 """
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_tenant_id
+from app.config.dependencies import get_session_dep
+from app.middleware import TenantIdDep
 from app.observability.logging import get_logger
 from app.repositories.base import BaseRepository
 from app.schemas.response import ApiResponse, DataResponse
 
 router = APIRouter(prefix="/tenants/kv", tags=["tenant-config"])
 logger = get_logger(__name__)
+
+# ============== 依赖类型别名 ==============
+
+# 数据库会话依赖
+DbDep = Annotated[AsyncSession, Depends(get_session_dep)]
 
 
 class TenantConfigRepository(BaseRepository[dict]):
@@ -76,8 +83,8 @@ class TenantConfigRepository(BaseRepository[dict]):
 @router.get("/{key}")
 async def get_tenant_config(
     key: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """获取配置值
 
@@ -98,8 +105,8 @@ async def get_tenant_config(
 async def set_tenant_config(
     key: str,
     value: Any,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新配置值
 
@@ -115,8 +122,8 @@ async def set_tenant_config(
 
 @router.get("/agent-config", response_model=DataResponse[dict])
 async def get_agent_config(
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """获取 Agent 配置
 
@@ -140,8 +147,8 @@ async def get_agent_config(
 @router.put("/agent-config")
 async def set_agent_config(
     config: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新 Agent 配置
 
@@ -161,8 +168,8 @@ async def set_agent_config(
 
 @router.get("/web-search-config", response_model=DataResponse[dict])
 async def get_web_search_config(
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """获取网络搜索配置
 
@@ -185,8 +192,8 @@ async def get_web_search_config(
 @router.put("/web-search-config")
 async def set_web_search_config(
     config: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新网络搜索配置
 

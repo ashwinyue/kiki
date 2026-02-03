@@ -1,6 +1,7 @@
 """认证中间件
 
 支持 JWT Token 和 X-API-Key 两种认证方式。
+提供 FastAPI 标准依赖注入函数。
 """
 
 from typing import Annotated
@@ -24,6 +25,67 @@ NO_AUTH_PATHS = {
     "/api/v1/auth/login",
     "/api/v1/auth/register",
 }
+
+
+# ============== FastAPI 依赖注入函数 ==============
+
+
+async def get_current_user_dep(
+    request: Request,
+) -> str | None:
+    """获取当前用户 ID（依赖注入）
+
+    从中间件设置的 request.state 中提取用户 ID。
+
+    Args:
+        request: FastAPI Request
+
+    Returns:
+        用户 ID（字符串），未认证返回 None
+    """
+    user_id = getattr(request.state, "user_id", None)
+    return str(user_id) if user_id is not None else None
+
+
+async def get_current_tenant_id(
+    request: Request,
+) -> int | None:
+    """获取当前租户 ID（依赖注入）
+
+    从中间件设置的 request.state 中提取租户 ID。
+
+    Args:
+        request: FastAPI Request
+
+    Returns:
+        租户 ID，未认证返回 None
+    """
+    return getattr(request.state, "tenant_id", None)
+
+
+async def require_current_user(
+    request: Request,
+) -> str:
+    """要求用户认证（依赖注入）
+
+    Args:
+        request: FastAPI Request
+
+    Returns:
+        用户 ID
+
+    Raises:
+        HTTPException: 未认证时抛出 401
+    """
+    user_id = getattr(request.state, "user_id", None)
+    if user_id is None:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户认证失败",
+        )
+    return str(user_id)
 
 
 class TenantMiddleware(BaseHTTPMiddleware):

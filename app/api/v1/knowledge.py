@@ -1,14 +1,17 @@
 """知识库 API 路由
 
 完全对齐 WeKnora99 API 接口
+使用 FastAPI 标准依赖注入模式。
 """
 
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_tenant_id
+from app.config.dependencies import get_session_dep
+from app.middleware import TenantIdDep
 from app.observability.logging import get_logger
 from app.repositories.base import PaginationParams
 from app.schemas.knowledge import (
@@ -45,6 +48,11 @@ from app.services.knowledge.base import KnowledgeBaseService
 router = APIRouter(prefix="/knowledge-bases", tags=["knowledge"])
 logger = get_logger(__name__)
 
+# ============== 依赖类型别名 ==============
+
+# 数据库会话依赖
+DbDep = Annotated[AsyncSession, Depends(get_session_dep)]
+
 
 # ============== 知识库管理 ==============
 
@@ -52,8 +60,8 @@ logger = get_logger(__name__)
 @router.post("", response_model=DataResponse[KnowledgeBaseResponse])
 async def create_knowledge_base(
     data: KnowledgeBaseCreate,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """创建知识库"""
     service = KnowledgeBaseService(db)
@@ -78,10 +86,10 @@ async def create_knowledge_base(
 
 @router.get("", response_model=DataResponse[list[KnowledgeBaseResponse]])
 async def list_knowledge_bases(
+    db: DbDep,
+    tenant_id: TenantIdDep,
     page: int = 1,
     size: int = 20,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
 ):
     """查询知识库列表"""
     service = KnowledgeBaseService(db)
@@ -113,8 +121,8 @@ async def list_knowledge_bases(
 @router.get("/{kb_id}", response_model=DataResponse[KnowledgeBaseResponse])
 async def get_knowledge_base(
     kb_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """获取知识库详情"""
     service = KnowledgeBaseService(db)
@@ -146,8 +154,8 @@ async def get_knowledge_base(
 async def update_knowledge_base(
     kb_id: str,
     data: KnowledgeBaseUpdate,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新知识库"""
     service = KnowledgeBaseService(db)
@@ -178,8 +186,8 @@ async def update_knowledge_base(
 @router.delete("/{kb_id}", response_model=ApiResponse)
 async def delete_knowledge_base(
     kb_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """删除知识库"""
     service = KnowledgeBaseService(db)
@@ -197,8 +205,8 @@ async def delete_knowledge_base(
 async def hybrid_search(
     kb_id: str,
     request: HybridSearchRequest,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """混合搜索
 
@@ -220,10 +228,10 @@ async def hybrid_search(
 @router.post("/{kb_id}/knowledge/file", response_model=ApiResponse)
 async def create_knowledge_from_file(
     kb_id: str,
+    db: DbDep,
+    tenant_id: TenantIdDep,
     file: UploadFile = File(...),
     enable_multimodel: bool = Form(True),
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
 ):
     """从文件创建知识条目
 
@@ -292,9 +300,9 @@ async def create_knowledge_from_file(
 async def create_knowledge_from_url(
     kb_id: str,
     url: str,
+    db: DbDep,
+    tenant_id: TenantIdDep,
     enable_multimodel: bool = True,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
 ):
     """从 URL 创建知识条目"""
     service = KnowledgeService(db)
@@ -311,10 +319,10 @@ async def create_knowledge_from_url(
 @router.get("/{kb_id}/knowledge", response_model=DataResponse[list[KnowledgeResponse]])
 async def list_knowledge(
     kb_id: str,
+    db: DbDep,
+    tenant_id: TenantIdDep,
     page: int = 1,
     size: int = 20,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
 ):
     """知识条目列表"""
     service = KnowledgeService(db)
@@ -327,8 +335,8 @@ async def list_knowledge(
 @router.get("/knowledge/{knowledge_id}", response_model=DataResponse[KnowledgeResponse])
 async def get_knowledge(
     knowledge_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """知识条目详情"""
     service = KnowledgeService(db)
@@ -343,8 +351,8 @@ async def get_knowledge(
 @router.delete("/knowledge/{knowledge_id}", response_model=ApiResponse)
 async def delete_knowledge(
     knowledge_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """删除知识条目"""
     service = KnowledgeService(db)
@@ -360,8 +368,8 @@ async def delete_knowledge(
 async def update_knowledge(
     knowledge_id: str,
     data: KnowledgeUpdate,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新知识条目"""
     service = KnowledgeService(db)
@@ -376,8 +384,8 @@ async def update_knowledge(
 @router.get("/knowledge/{knowledge_id}/download")
 async def download_knowledge(
     knowledge_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """下载知识文件
 
@@ -406,8 +414,8 @@ async def download_knowledge(
 async def create_knowledge_manual(
     kb_id: str,
     data: ManualKnowledgeCreate,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """手工创建知识条目
 
@@ -437,8 +445,8 @@ async def create_knowledge_manual(
 @router.post("/copy", response_model=DataResponse[CopyKnowledgeBaseResponse])
 async def copy_knowledge_base(
     data: CopyKnowledgeBaseRequest,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """拷贝知识库（异步任务）
 
@@ -499,8 +507,8 @@ async def copy_knowledge_base(
 )
 async def get_copy_progress(
     task_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """获取知识库复制进度
 
@@ -532,8 +540,8 @@ async def get_copy_progress(
 )
 async def knowledge_search(
     request: KnowledgeSearchRequest,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """独立知识搜索
 
@@ -611,8 +619,8 @@ async def knowledge_search(
 )
 async def get_kb_init_config(
     kb_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """获取知识库初始化配置
 
@@ -633,8 +641,8 @@ async def get_kb_init_config(
 async def update_kb_init_config(
     kb_id: str,
     data: KBInitConfigRequest,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新知识库初始化配置
 
@@ -677,8 +685,8 @@ async def update_kb_init_config(
 async def validate_kb_config(
     kb_id: str,
     data: KBInitConfigRequest,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """验证知识库配置
 
@@ -723,8 +731,8 @@ async def validate_kb_config(
 async def initialize_kb(
     kb_id: str,
     data: KBInitConfigRequest,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """初始化知识库
 

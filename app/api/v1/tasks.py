@@ -1,6 +1,7 @@
 """任务管理 API
 
 对齐 WeKnora99 的任务管理功能，提供任务的 CRUD 操作。
+使用 FastAPI 标准依赖注入模式。
 
 API 端点:
     - POST /tasks - 创建任务
@@ -11,11 +12,11 @@ API 端点:
     - GET /tasks/{task_id}/logs - 获取任务日志
 """
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.api.dependencies import get_current_user_id, get_current_tenant_id
+from app.middleware import TenantIdDep, UserIdDep
 from app.models.task import TaskCreate, TaskList, TaskPublic, TaskUpdate
 from app.observability.logging import get_logger
 from app.schemas.response import Response
@@ -60,8 +61,8 @@ async def verify_task_access(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_task(
     task_data: TaskCreate,
-    tenant_id: int = Depends(get_current_tenant_id),
-    user_id: str = Depends(get_current_user_id),
+    tenant_id: TenantIdDep,
+    user_id: UserIdDep,
 ) -> Response[TaskPublic]:
     """创建异步任务
 
@@ -138,22 +139,22 @@ async def create_task(
 
 @router.get("")
 async def list_tasks(
+    tenant_id: TenantIdDep,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     task_type: str | None = Query(None, description="任务类型"),
     status: str | None = Query(None, description="任务状态"),
     business_id: str | None = Query(None, description="业务 ID"),
-    tenant_id: int = Depends(get_current_tenant_id),
 ) -> Response[TaskList]:
     """获取任务列表
 
     Args:
+        tenant_id: 租户 ID
         page: 页码
         size: 每页数量
         task_type: 任务类型筛选
         status: 状态筛选
         business_id: 业务 ID 筛选
-        tenant_id: 租户 ID
 
     Returns:
         任务列表
@@ -182,7 +183,7 @@ async def list_tasks(
 @router.get("/{task_id}")
 async def get_task(
     task_id: str,
-    tenant_id: int = Depends(get_current_tenant_id),
+    tenant_id: TenantIdDep,
 ) -> Response[TaskPublic]:
     """获取任务详情
 
@@ -209,7 +210,7 @@ async def get_task(
 async def update_task(
     task_id: str,
     task_update: TaskUpdate,
-    tenant_id: int = Depends(get_current_tenant_id),
+    tenant_id: TenantIdDep,
 ) -> Response[TaskPublic]:
     """更新任务
 
@@ -264,7 +265,7 @@ async def update_task(
 @router.delete("/{task_id}")
 async def cancel_task_endpoint(
     task_id: str,
-    tenant_id: int = Depends(get_current_tenant_id),
+    tenant_id: TenantIdDep,
 ) -> Response[dict]:
     """取消任务
 
@@ -310,19 +311,19 @@ async def cancel_task_endpoint(
 @router.get("/{task_id}/logs")
 async def get_task_logs(
     task_id: str,
+    tenant_id: TenantIdDep,
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=200),
     level: str | None = Query(None, description="日志级别"),
-    tenant_id: int = Depends(get_current_tenant_id),
 ) -> Response[dict]:
     """获取任务日志
 
     Args:
         task_id: 任务 ID
+        tenant_id: 租户 ID
         page: 页码
         size: 每页数量
         level: 日志级别筛选
-        tenant_id: 租户 ID
 
     Returns:
         任务日志列表
@@ -358,7 +359,7 @@ async def get_task_logs(
 async def enqueue_task(
     task_type: str,
     payload: dict[str, Any],
-    tenant_id: int = Depends(get_current_tenant_id),
+    tenant_id: TenantIdDep,
     user_id: str = Depends(get_current_user_id),
     business_id: str | None = None,
     priority: str = Query("default", description="优先级: critical, default, low"),

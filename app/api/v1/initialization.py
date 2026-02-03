@@ -1,12 +1,16 @@
 """系统初始化 API 路由
 
 对齐 WeKnora99 系统初始化 API 规范
+使用 FastAPI 标准依赖注入模式。
 """
+
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_tenant_id
+from app.config.dependencies import get_session_dep
+from app.middleware import TenantIdDep
 from app.observability.logging import get_logger
 from app.schemas.initialization import (
     EmbeddingTestRequest,
@@ -27,12 +31,20 @@ from app.services.ollama import get_ollama_service
 router = APIRouter(prefix="/initialization", tags=["initialization"])
 logger = get_logger(__name__)
 
+# ============== 依赖类型别名 ==============
+
+# 数据库会话依赖
+DbDep = Annotated[AsyncSession, Depends(get_session_dep)]
+
+router = APIRouter(prefix="/initialization", tags=["initialization"])
+logger = get_logger(__name__)
+
 
 @router.get("/kb/{kb_id}/config", response_model=DataResponse[dict])
 async def get_kb_config(
     kb_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """获取知识库配置
 
@@ -51,8 +63,8 @@ async def get_kb_config(
 async def update_kb_config(
     kb_id: str,
     data: KBModelConfigRequest,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新知识库配置
 
@@ -81,8 +93,8 @@ async def update_kb_config(
 async def initialize_kb(
     kb_id: str,
     data: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """初始化知识库
 
@@ -107,7 +119,7 @@ async def initialize_kb(
 
 @router.get("/ollama/status", response_model=DataResponse[OllamaStatusResponse])
 async def check_ollama_status(
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """检查 Ollama 服务状态
 
@@ -122,7 +134,7 @@ async def check_ollama_status(
 @router.post("/models/embedding/test", response_model=DataResponse[ModelTestResponse])
 async def test_embedding_model(
     data: EmbeddingTestRequest,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """测试 Embedding 模型
 
@@ -139,7 +151,7 @@ async def test_embedding_model(
 @router.post("/models/rerank/check", response_model=DataResponse[ModelTestResponse])
 async def check_rerank_model(
     data: RerankTestRequest,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """检查 Rerank 模型
 
@@ -156,7 +168,7 @@ async def check_rerank_model(
 @router.post("/models/remote/check", response_model=DataResponse[ModelTestResponse])
 async def check_remote_model(
     data: RemoteModelCheckRequest,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """检查远程模型连接
 
@@ -175,7 +187,7 @@ async def check_remote_model(
 
 @router.get("/ollama/models", response_model=DataResponse[dict])
 async def list_ollama_models(
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """列出已安装的 Ollama 模型
 
@@ -192,7 +204,7 @@ async def list_ollama_models(
 @router.post("/ollama/models/check", response_model=DataResponse[dict])
 async def check_ollama_models(
     data: dict,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """检查指定的 Ollama 模型是否已安装
 
@@ -218,7 +230,7 @@ async def check_ollama_models(
 @router.post("/ollama/models/download", response_model=DataResponse[dict])
 async def download_ollama_model(
     data: dict,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """异步下载指定的 Ollama 模型
 
@@ -246,7 +258,7 @@ async def download_ollama_model(
 @router.get("/ollama/download/progress/{task_id}", response_model=DataResponse[dict])
 async def get_download_progress(
     task_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """获取 Ollama 模型下载任务的进度
 
@@ -263,7 +275,7 @@ async def get_download_progress(
 
 @router.get("/ollama/download/tasks", response_model=DataResponse[list])
 async def list_download_tasks(
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """列出所有 Ollama 模型下载任务
 
@@ -278,7 +290,7 @@ async def list_download_tasks(
 @router.delete("/ollama/models/{model_name:path}", response_model=ApiResponse)
 async def delete_ollama_model(
     model_name: str,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """删除指定的 Ollama 模型
 
@@ -304,7 +316,7 @@ async def delete_ollama_model(
 @router.get("/ollama/models/{model_name:path}/info", response_model=DataResponse[dict])
 async def get_ollama_model_info(
     model_name: str,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """获取 Ollama 模型详细信息
 
@@ -331,7 +343,7 @@ async def get_ollama_model_info(
 @router.post("/models/llm/test", response_model=DataResponse[TestResultResponse])
 async def test_llm_model(
     data: LLMTestRequest,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """测试 LLM 模型
 
@@ -362,7 +374,7 @@ async def test_llm_model(
 @router.post("/models/multimodal/test", response_model=DataResponse[TestResultResponse])
 async def test_multimodal_model(
     data: MultimodalTestRequest,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """测试多模态模型
 
@@ -393,8 +405,8 @@ async def test_multimodal_model(
 @router.post("/models/by-id/{model_id}/test", response_model=DataResponse[TestResultResponse])
 async def test_model_by_id(
     model_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """根据模型 ID 测试模型
 

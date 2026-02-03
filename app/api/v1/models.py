@@ -1,14 +1,16 @@
 """模型 API 路由
 
 完全对齐 WeKnora99 API 接口
+使用 FastAPI 标准依赖注入模式。
 """
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_tenant_id
+from app.config.dependencies import get_session_dep
+from app.middleware import TenantIdDep
 from app.repositories.base import PaginationParams
 from app.schemas.model import (
     ModelCreate,
@@ -21,12 +23,17 @@ from app.services.model_service import ModelService, get_providers
 
 router = APIRouter(prefix="/models", tags=["models"])
 
+# ============== 依赖类型别名 ==============
+
+# 数据库会话依赖
+DbDep = Annotated[AsyncSession, Depends(get_session_dep)]
+
 
 @router.post("", response_model=DataResponse[ModelResponse])
 async def create_model(
     data: ModelCreate,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """创建模型"""
     service = ModelService(db)
@@ -51,11 +58,11 @@ async def create_model(
 
 @router.get("", response_model=DataResponse[list[ModelResponse]])
 async def list_models(
+    db: DbDep,
+    tenant_id: TenantIdDep,
     type: str | None = None,
     page: int = 1,
     size: int = 20,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
 ):
     """模型列表"""
     service = ModelService(db)
@@ -85,8 +92,8 @@ async def list_models(
 @router.get("/{model_id}", response_model=DataResponse[ModelResponse])
 async def get_model(
     model_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """模型详情"""
     service = ModelService(db)
@@ -116,8 +123,8 @@ async def get_model(
 async def update_model(
     model_id: str,
     data: ModelUpdate,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新模型"""
     service = ModelService(db)
@@ -146,8 +153,8 @@ async def update_model(
 @router.delete("/{model_id}", response_model=ApiResponse)
 async def delete_model(
     model_id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """删除模型"""
     service = ModelService(db)

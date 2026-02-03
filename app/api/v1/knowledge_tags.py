@@ -1,12 +1,16 @@
 """知识标签 API 路由
 
 对齐 WeKnora99 API 接口规范
+使用 FastAPI 标准依赖注入模式。
 """
+
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_tenant_id
+from app.config.dependencies import get_session_dep
+from app.middleware import TenantIdDep
 from app.models.knowledge import KnowledgeTag
 from app.observability.logging import get_logger
 from app.repositories.base import PaginationParams
@@ -22,15 +26,20 @@ from app.schemas.response import ApiResponse, DataResponse
 router = APIRouter(prefix="/knowledge-bases", tags=["knowledge-tags"])
 logger = get_logger(__name__)
 
+# ============== 依赖类型别名 ==============
+
+# 数据库会话依赖
+DbDep = Annotated[AsyncSession, Depends(get_session_dep)]
+
 
 @router.get("/{kb_id}/tags", response_model=DataResponse[TagListResponse])
 async def list_tags(
     kb_id: str,
+    db: DbDep,
+    tenant_id: TenantIdDep,
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页条数"),
     keyword: str | None = Query(None, description="标签名称关键字搜索"),
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
 ):
     """获取知识库标签列表
 
@@ -76,8 +85,8 @@ async def list_tags(
 async def create_tag(
     kb_id: str,
     data: TagCreate,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """创建标签
 
@@ -133,8 +142,8 @@ async def update_tag(
     kb_id: str,
     tag_id: str,
     data: TagUpdate,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新标签
 
@@ -188,9 +197,9 @@ async def update_tag(
 async def delete_tag(
     kb_id: str,
     tag_id: str,
+    db: DbDep,
+    tenant_id: TenantIdDep,
     force: bool = Query(False, description="强制删除（即使标签被引用）"),
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
 ):
     """删除标签
 

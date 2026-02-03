@@ -2,22 +2,27 @@
 
 提供聊天接口，支持同步和流式响应（SSE）。
 遵循 LangGraph streaming 最佳实践。
+使用 FastAPI 标准依赖注入模式。
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from starlette.requests import Request as StarletteRequest
 
-from app.agent import get_agent
-from app.agent.message_utils import extract_ai_content, format_messages_to_dict
-from app.agent.memory.context import get_context_manager
+from app.agent import LangGraphAgent
+from app.agent.message_utils import extract_ai_content
 from app.agent.state import create_state_from_input
-from app.middleware import TenantIdDep
-from app.config.settings import get_settings
+from app.config.dependencies import (
+    get_agent_dep,
+    get_context_manager_dep,
+    get_llm_service_dep,
+)
+from app.middleware import TenantIdDep, get_current_user_dep, get_current_tenant_id
 from app.observability.logging import get_logger
 from app.rate_limit.limiter import RateLimit, limiter
 from app.schemas.chat import (
@@ -35,16 +40,27 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+# ============== 依赖类型别名 ==============
 
-# ============== 辅助函数 ==============
+# Agent 依赖
+AgentDep = Annotated[LangGraphAgent, Depends(get_agent_dep)]
+
+# 租户 ID 依赖（可选）
+TenantIdDep = Annotated[int | None, Depends(get_current_tenant_id)]
+
+# 用户 ID 依赖（可选）
+UserIdDep = Annotated[str | None, Depends(get_current_user_dep)]
 
 
-async def _validate_session_access(
+# ============== 辅助依赖函数 ==============
+
+
+async def _validate_session_access_dep(
     session_id: str,
     user_id: str | None,
     tenant_id: int | None,
 ) -> None:
-    """验证会话访问权限
+    """验证会话访问权限（依赖注入）
 
     Args:
         session_id: 会话 ID
@@ -94,26 +110,37 @@ def _prepare_websearch_config(
 async def chat(
     request: ChatRequest,
     http_request: StarletteRequest,
+    agent: AgentDep,
     tenant_id: TenantIdDep = None,
+    user_id: UserIdDep = None,
 ) -> ChatResponse:
     """聊天接口（非流式）
 
+    使用标准 FastAPI 依赖注入模式：
+    - agent: 通过依赖注入获取 LangGraphAgent 实例
+    - tenant_id: 通过依赖注入获取租户 ID
+    - user_id: 通过依赖注入获取用户 ID
+
     Args:
         request: 聊天请求
+        http_request: FastAPI 请求对象（用于限流）
+        agent: Agent 实例（依赖注入）
+        tenant_id: 租户 ID（依赖注入）
+        user_id: 用户 ID（依赖注入）
 
     Returns:
         ChatResponse: 聊天响应
     """
     try:
-        state_user_id = getattr(http_request.state, "user_id", None)
-        effective_user_id = resolve_effective_user_id(request.user_id, state_user_id)
+        # 解析有效用户 ID
+        effective_user_id = resolve_effective_user_id(request.user_id, user_id)
 
-        await _validate_session_access(
+        # 验证会话访问权限
+        await _validate_session_access_dep(
             session_id=request.session_id,
             user_id=effective_user_id,
             tenant_id=tenant_id,
         )
-        agent = await get_agent()
 
         # 准备 websearch 配置
         websearch_config = _prepare_websearch_config(request.websearch)
@@ -124,6 +151,7 @@ async def chat(
                 search_depth=websearch_config["search_depth"],
             )
 
+        # 使用依赖注入的 agent
         messages = await agent.get_response(
             message=request.message,
             session_id=request.session_id,
@@ -147,9 +175,14 @@ async def chat(
 async def chat_stream(
     request: StreamChatRequest,
     http_request: StarletteRequest,
+    agent: AgentDep,
     tenant_id: TenantIdDep = None,
+    user_id: UserIdDep = None,
 ) -> StreamingResponse:
     """流式聊天接口（SSE）
+
+    使用标准 FastAPI 依赖注入模式：
+    - agent: 通过依赖注入获取 LangGraphAgent 实例
 
     遵循 LangGraph streaming 最佳实践：
     - 使用 Agent 层统一处理（包含 checkpointer、中间件、追踪）
@@ -159,14 +192,19 @@ async def chat_stream(
 
     Args:
         request: 聊天请求
+        http_request: FastAPI 请求对象（用于限流）
+        agent: Agent 实例（依赖注入）
+        tenant_id: 租户 ID（依赖注入）
+        user_id: 用户 ID（依赖注入）
 
     Returns:
         StreamingResponse: SSE 流式响应
     """
-    state_user_id = getattr(http_request.state, "user_id", None)
-    effective_user_id = resolve_effective_user_id(request.user_id, state_user_id)
+    # 解析有效用户 ID
+    effective_user_id = resolve_effective_user_id(request.user_id, user_id)
 
-    await _validate_session_access(
+    # 验证会话访问权限
+    await _validate_session_access_dep(
         session_id=request.session_id,
         user_id=effective_user_id,
         tenant_id=tenant_id,
@@ -184,7 +222,7 @@ async def chat_stream(
     async def event_generator() -> AsyncIterator[str]:
         """生成 SSE 事件流"""
         try:
-            agent = await get_agent()
+            # 使用依赖注入的 agent
             graph = await agent.get_compiled_graph()
 
             # 准备输入
@@ -207,6 +245,8 @@ async def chat_stream(
             callbacks = []
             try:
                 from app.agent.callbacks import KikiCallbackHandler
+
+                from app.config.settings import get_settings
 
                 settings = get_settings()
                 callbacks.append(
@@ -346,26 +386,31 @@ async def chat_stream(
 @router.get("/history/{session_id}", response_model=ChatHistoryResponse)
 @limiter.limit(RateLimit.API)
 async def get_chat_history(
-    request: StarletteRequest,
     session_id: str,
+    agent: AgentDep,
     tenant_id: TenantIdDep = None,
+    user_id: UserIdDep = None,
 ) -> ChatHistoryResponse:
     """获取聊天历史
 
+    使用标准 FastAPI 依赖注入模式：
+    - agent: 通过依赖注入获取 LangGraphAgent 实例
+
     Args:
         session_id: 会话 ID
+        agent: Agent 实例（依赖注入）
+        tenant_id: 租户 ID（依赖注入）
+        user_id: 用户 ID（依赖注入）
 
     Returns:
         ChatHistoryResponse: 聊天历史
     """
     try:
-        request_user_id = getattr(request.state, "user_id", None)
-        await _validate_session_access(
+        await _validate_session_access_dep(
             session_id=session_id,
-            user_id=str(request_user_id) if request_user_id is not None else None,
+            user_id=user_id,
             tenant_id=tenant_id,
         )
-        agent = await get_agent()
 
         messages = await agent.get_chat_history(session_id)
 
@@ -392,30 +437,38 @@ async def get_chat_history(
 @limiter.limit(RateLimit.API)
 async def clear_chat_history(
     session_id: str,
-    request: StarletteRequest,
+    agent: AgentDep,
+    context_manager=Depends(get_context_manager_dep),
     tenant_id: TenantIdDep = None,
+    user_id: UserIdDep = None,
 ) -> dict[str, str]:
     """清除聊天历史
 
+    使用标准 FastAPI 依赖注入模式：
+    - agent: 通过依赖注入获取 LangGraphAgent 实例
+    - context_manager: 通过依赖注入获取上下文管理器
+
     Args:
         session_id: 会话 ID
-        request: FastAPI 请求对象
+        agent: Agent 实例（依赖注入）
+        context_manager: 上下文管理器（依赖注入）
+        tenant_id: 租户 ID（依赖注入）
+        user_id: 用户 ID（依赖注入）
 
     Returns:
         操作结果
     """
     try:
-        request_user_id = getattr(request.state, "user_id", None)
-        await _validate_session_access(
+        await _validate_session_access_dep(
             session_id=session_id,
-            user_id=str(request_user_id) if request_user_id is not None else None,
+            user_id=user_id,
             tenant_id=tenant_id,
         )
-        agent = await get_agent()
+
+        # 清除 agent 聊天历史
         await agent.clear_chat_history(session_id)
 
-        # 同时清除 Redis 上下文
-        context_manager = get_context_manager()
+        # 清除上下文存储
         await context_manager.clear_context(session_id)
 
         return {"status": "success", "message": "聊天历史已清除"}

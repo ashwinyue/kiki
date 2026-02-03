@@ -2,6 +2,7 @@
 
 对齐 WeKnora99 知识库 FAQ API 规范
 路径: /knowledge-bases/{id}/faq/*
+使用 FastAPI 标准依赖注入模式。
 """
 
 from typing import Annotated
@@ -9,25 +10,31 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_tenant_id
+from app.config.dependencies import get_session_dep
+from app.middleware import TenantIdDep
 from app.observability.logging import get_logger
 from app.schemas.response import ApiResponse, DataResponse
 
 router = APIRouter(tags=["knowledge-faq"])
 logger = get_logger(__name__)
 
+# ============== 依赖类型别名 ==============
+
+# 数据库会话依赖
+DbDep = Annotated[AsyncSession, Depends(get_session_dep)]
+
 
 @router.get("/{id}/faq/entries", response_model=DataResponse[dict])
 async def list_faq_entries(
     id: str,
+    db: DbDep,
+    tenant_id: TenantIdDep,
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量", alias="page_size"),
     tag_id: int | None = Query(None, description="标签ID筛选 (seq_id)"),
     keyword: str | None = Query(None, description="关键词搜索"),
     search_field: str | None = Query(None, description="搜索字段"),
     sort_order: str | None = Query(None, description="排序方式"),
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
 ):
     """获取知识库 FAQ 条目列表
 
@@ -55,8 +62,8 @@ async def list_faq_entries(
 @router.get("/{id}/faq/entries/export")
 async def export_faq_entries(
     id: str,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """导出 FAQ 条目为 CSV
 
@@ -81,8 +88,8 @@ async def export_faq_entries(
 async def get_faq_entry(
     id: str,
     entry_id: int,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """获取 FAQ 条目详情
 
@@ -98,8 +105,8 @@ async def get_faq_entry(
 async def upsert_faq_entries(
     id: str,
     data: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """批量创建/更新 FAQ 条目
 
@@ -124,8 +131,8 @@ async def upsert_faq_entries(
 async def create_faq_entry(
     id: str,
     data: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """创建单个 FAQ 条目
 
@@ -146,8 +153,8 @@ async def update_faq_entry(
     id: str,
     entry_id: int,
     data: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新 FAQ 条目
 
@@ -169,8 +176,8 @@ async def add_similar_questions(
     id: str,
     entry_id: int,
     data: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """添加相似问题到 FAQ 条目
 
@@ -194,8 +201,8 @@ async def add_similar_questions(
 async def update_entry_fields_batch(
     id: str,
     data: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """批量更新 FAQ 字段
 
@@ -218,8 +225,8 @@ async def update_entry_fields_batch(
 async def update_entry_tags_batch(
     id: str,
     data: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """批量更新 FAQ 标签
 
@@ -242,8 +249,8 @@ async def update_entry_tags_batch(
 async def delete_faq_entries(
     id: str,
     data: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """批量删除 FAQ 条目
 
@@ -268,8 +275,8 @@ async def delete_faq_entries(
 async def search_faq(
     id: str,
     data: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """搜索 FAQ
 
@@ -291,7 +298,7 @@ async def search_faq(
 @router.get("/faq/import/progress/{task_id}", response_model=DataResponse[dict])
 async def get_import_progress(
     task_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ):
     """获取 FAQ 导入进度
 
@@ -315,8 +322,8 @@ async def get_import_progress(
 async def update_last_import_result_display_status(
     id: str,
     data: dict,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(get_tenant_id),
+    db: DbDep,
+    tenant_id: TenantIdDep,
 ):
     """更新 FAQ 最后一次导入结果显示状态
 
