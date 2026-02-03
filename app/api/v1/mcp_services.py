@@ -1,6 +1,6 @@
 """MCP 服务管理 API
 
-提供 MCP 服务配置的创建、列表、查询、更新、删除等功能。
+提供 MCP 服务配置的创建、列表、查询、更新、删除、工具发现等功能。
 使用 Service 层处理业务逻辑，API 层仅负责请求/响应处理。
 """
 
@@ -12,20 +12,14 @@ from starlette.requests import Request as StarletteRequest
 
 from app.infra.database import get_session
 from app.middleware import RequiredTenantIdDep
-from app.models.agent import MCPServiceCreate, MCPServiceUpdate
+from app.models import MCPServiceCreate, MCPServiceRequest, MCPServiceUpdate
 from app.observability.logging import get_logger
 from app.rate_limit.limiter import RateLimit, limiter
 from app.schemas.mcp_service import (
     MCPServiceListResponse,
-    MCPServiceRequest,
     MCPServiceResponse,
 )
-from app.services.mcp_service import (
-    McpServiceService,
-)
-from app.services.mcp_service import (
-    get_mcp_service as get_mcp_service_service,
-)
+from app.services.mcp_service import McpServiceService, get_mcp_service
 
 router = APIRouter(prefix="/mcp-services", tags=["MCP Services"])
 logger = get_logger(__name__)
@@ -41,12 +35,46 @@ logger = get_logger(__name__)
 async def list_mcp_services(
     request: StarletteRequest,
     tenant_id: RequiredTenantIdDep,
-    service: Annotated[McpServiceService, Depends(get_mcp_service_service)],
+    service: Annotated[McpServiceService, Depends(get_mcp_service)],
     include_disabled: bool = Query(True, description="是否包含禁用服务"),
 ) -> MCPServiceListResponse:
     """列出租户的 MCP 服务"""
     items = await service.list_services(tenant_id, include_disabled)
     return MCPServiceListResponse(items=items, total=len(items))
+
+
+@router.post(
+    "/validate",
+    summary="验证 MCP 服务配置",
+    description="在创建服务前验证配置是否正确，尝试连接并获取工具列表预览",
+    responses={
+        status.HTTP_200_OK: {"description": "验证完成"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "未认证"},
+    },
+)
+@limiter.limit(RateLimit.API)
+async def validate_mcp_service_config(
+    request: StarletteRequest,
+    tenant_id: RequiredTenantIdDep,
+    service: Annotated[McpServiceService, Depends(get_mcp_service)],
+    data: MCPServiceRequest,
+    timeout_seconds: int = Query(30, description="连接超时时间（秒）"),
+) -> dict:
+    """验证 MCP 服务配置"""
+    create_data = MCPServiceCreate(
+        name=data.name,
+        description=data.description,
+        tenant_id=tenant_id,
+        enabled=data.enabled,
+        transport_type=data.transport_type,
+        url=data.url,
+        headers=data.headers,
+        auth_config=data.auth_config,
+        advanced_config=data.advanced_config,
+        stdio_config=data.stdio_config,
+        env_vars=data.env_vars,
+    )
+    return await service.validate_service_config(create_data, tenant_id, timeout_seconds)
 
 
 @router.post(
@@ -64,7 +92,7 @@ async def list_mcp_services(
 async def create_mcp_service(
     request: StarletteRequest,
     tenant_id: RequiredTenantIdDep,
-    service: Annotated[McpServiceService, Depends(get_mcp_service_service)],
+    service: Annotated[McpServiceService, Depends(get_mcp_service)],
     data: MCPServiceRequest,
 ) -> dict:
     """创建 MCP 服务"""
@@ -100,11 +128,36 @@ async def create_mcp_service(
 async def get_mcp_service(
     request: StarletteRequest,
     tenant_id: RequiredTenantIdDep,
-    service: Annotated[McpServiceService, Depends(get_mcp_service_service)],
+    service: Annotated[McpServiceService, Depends(get_mcp_service)],
     service_id: int,
 ) -> dict:
     """获取 MCP 服务详情"""
     return await service.get_service(service_id, tenant_id)
+
+
+@router.get(
+    "/{service_id}/tools",
+    summary="获取 MCP 服务工具列表",
+    description="获取指定 MCP 服务器提供的工具列表（工具发现）",
+    responses={
+        status.HTTP_200_OK: {"description": "成功返回工具列表"},
+        status.HTTP_400_BAD_REQUEST: {"description": "服务未启用"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "未认证"},
+        status.HTTP_403_FORBIDDEN: {"description": "无权访问"},
+        status.HTTP_404_NOT_FOUND: {"description": "服务不存在"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "连接 MCP 服务器失败"},
+    },
+)
+@limiter.limit(RateLimit.API)
+async def get_mcp_service_tools(
+    request: StarletteRequest,
+    tenant_id: RequiredTenantIdDep,
+    service: Annotated[McpServiceService, Depends(get_mcp_service)],
+    service_id: int,
+    timeout_seconds: int = Query(60, description="连接超时时间（秒）"),
+) -> dict:
+    """获取 MCP 服务提供的工具列表"""
+    return await service.get_service_tools(service_id, tenant_id, timeout_seconds)
 
 
 @router.patch(
@@ -124,7 +177,7 @@ async def update_mcp_service(
     request: StarletteRequest,
     tenant_id: RequiredTenantIdDep,
     session: Annotated[AsyncSession, Depends(get_session)],
-    service: Annotated[McpServiceService, Depends(get_mcp_service_service)],
+    service: Annotated[McpServiceService, Depends(get_mcp_service)],
     service_id: int,
     data: MCPServiceRequest,
 ) -> dict:
@@ -160,7 +213,7 @@ async def update_mcp_service(
 async def delete_mcp_service(
     request: StarletteRequest,
     tenant_id: RequiredTenantIdDep,
-    service: Annotated[McpServiceService, Depends(get_mcp_service_service)],
+    service: Annotated[McpServiceService, Depends(get_mcp_service)],
     service_id: int,
 ) -> None:
     """删除 MCP 服务"""

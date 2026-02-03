@@ -146,4 +146,5 @@ aold/miniblog
 
 aold
 
-a
+a# 配置文件（包含敏感信息，不应提交）
+conf.yaml

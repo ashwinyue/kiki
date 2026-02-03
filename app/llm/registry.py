@@ -1,7 +1,4 @@
-"""LLM 模型注册表
-
-维护可用的 LLM 配置列表，按名称检索。
-"""
+"""LLM 模型注册表"""
 
 from typing import Any
 
@@ -16,10 +13,7 @@ settings = get_settings()
 
 
 class LLMRegistry:
-    """LLM 模型注册表
-
-    维护可用的 LLM 配置列表，按名称检索。
-    """
+    """LLM 模型注册表"""
 
     _models: dict[str, dict[str, Any]] = {}
     _initialized: bool = False
@@ -38,13 +32,7 @@ class LLMRegistry:
         llm: BaseChatModel,
         description: str | None = None,
     ) -> None:
-        """注册 LLM 模型
-
-        Args:
-            name: 模型名称
-            llm: LLM 实例
-            description: 模型描述
-        """
+        """注册 LLM 模型"""
         cls._models[name] = {
             "name": name,
             "llm": llm,
@@ -54,18 +42,7 @@ class LLMRegistry:
 
     @classmethod
     def get(cls, name: str, **kwargs) -> BaseChatModel:
-        """获取 LLM 模型
-
-        Args:
-            name: 模型名称
-            **kwargs: 覆盖默认配置的参数
-
-        Returns:
-            BaseChatModel 实例
-
-        Raises:
-            ValueError: 如果模型名称未注册
-        """
+        """获取 LLM 模型"""
         cls._ensure_initialized()
 
         if name not in cls._models:
@@ -76,10 +53,8 @@ class LLMRegistry:
             logger.debug(
                 "creating_llm_with_custom_args", model_name=name, kwargs=list(kwargs.keys())
             )
-            # 根据模型类型创建新实例
             base_llm = cls._models[name]["llm"]
             if isinstance(base_llm, ChatOpenAI):
-                # DashScope 模型使用专用配置
                 if name.startswith("qwen-"):
                     api_key = settings.dashscope_api_key or settings.llm_api_key
                     base_url = settings.llm_base_url or settings.dashscope_base_url
@@ -95,7 +70,6 @@ class LLMRegistry:
                     base_url=settings.llm_base_url,
                     **kwargs,
                 )
-            # 其他 LLM 类型可以在这里添加
             return base_llm
 
         logger.debug("using_registered_llm", model_name=name)
@@ -103,32 +77,19 @@ class LLMRegistry:
 
     @classmethod
     def list_models(cls) -> list[str]:
-        """列出所有已注册的模型名称
-
-        Returns:
-            模型名称列表
-        """
+        """列出所有已注册的模型名称"""
         cls._ensure_initialized()
         return list(cls._models.keys())
 
     @classmethod
     def is_registered(cls, name: str) -> bool:
-        """检查模型是否已注册
-
-        Args:
-            name: 模型名称
-
-        Returns:
-            是否已注册
-        """
+        """检查模型是否已注册"""
         cls._ensure_initialized()
         return name in cls._models
 
 
 def _init_default_models() -> None:
     """初始化默认的 LLM 模型"""
-
-    # OpenAI 模型
     if settings.llm_provider == "openai":
         models = [
             ("gpt-4o", "GPT-4O - 高性能多模态模型"),
@@ -148,7 +109,6 @@ def _init_default_models() -> None:
             except Exception as e:
                 logger.warning("failed_to_register_llm", model_name=model_name, error=str(e))
 
-    # Anthropic 模型
     elif settings.llm_provider == "anthropic":
         try:
             from langchain_anthropic import ChatAnthropic
@@ -172,7 +132,6 @@ def _init_default_models() -> None:
         except ImportError:
             logger.warning("langchain_anthropic_not_installed")
 
-    # Ollama 模型
     elif settings.llm_provider == "ollama":
         try:
             from langchain_ollama import ChatOllama
@@ -187,7 +146,6 @@ def _init_default_models() -> None:
         except ImportError:
             logger.warning("langchain_ollama_not_installed")
 
-    # DeepSeek 模型
     elif settings.llm_provider == "deepseek":
         api_key = settings.deepseek_api_key or settings.llm_api_key
         if not api_key:
@@ -215,9 +173,7 @@ def _init_default_models() -> None:
             except Exception as e:
                 logger.warning("failed_to_register_deepseek", model_name=model_name, error=str(e))
 
-    # DashScope (Qwen) 模型
     elif settings.llm_provider == "dashscope":
-        # DashScope 提供 OpenAI 兼容 API
         api_key = settings.dashscope_api_key or settings.llm_api_key
         if not api_key:
             logger.warning("dashscope_api_key_not_configured")

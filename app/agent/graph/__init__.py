@@ -38,6 +38,7 @@ from app.agent.graph.agents import (
     list_agents_by_type,
 )
 from app.agent.graph.builder import (
+    DEFAULT_SYSTEM_PROMPT,
     build_chat_graph,
     compile_chat_graph,
     invoke_chat_graph,
@@ -90,7 +91,6 @@ from app.agent.graph.nodes import (
 
 # ReAct Agent
 from app.agent.graph.react import (
-    ReactAgent,
     create_react_agent,
 )
 
@@ -154,6 +154,7 @@ __all__ = [
     # ============== 构建函数 ==============
     "build_chat_graph",
     "compile_chat_graph",
+    "DEFAULT_SYSTEM_PROMPT",
     "invoke_chat_graph",
     "stream_chat_graph",
     # ============== Checkpoint 持久化 ==============
@@ -178,7 +179,6 @@ __all__ = [
     "interrupt_chat_node",
     "execute_node",
     # ============== ReAct Agent ==============
-    "ReactAgent",
     "create_react_agent",
     # ============== Agent 工厂 ==============
     "create_agent",

@@ -1,11 +1,4 @@
-"""Embedding 模型集成
-
-支持多种 Embedding 提供商：
-- OpenAI: text-embedding-3-small/large
-- DashScope: text-embedding-v4 (Qwen)
-- VoyageAI: voyage-3-large
-- 本地模型: Ollama embeddings
-"""
+"""Embedding 模型集成"""
 
 from enum import Enum
 from typing import Literal
@@ -29,17 +22,7 @@ class EmbeddingProvider(str, Enum):
 
 
 class DashScopeEmbeddings(OpenAIEmbeddings):
-    """DashScope Qwen Embedding V4
-
-    使用 OpenAI 兼容模式调用 DashScope API。
-    文档: https://help.aliyun.com/zh/model-studio/text-embedding-synchronous-api
-
-    模型参数:
-    - text-embedding-v4: 1024 维（默认），支持 256-2048 维
-    - 单行最大 Token: 8,192
-    - 最大批处理行数: 10
-    - 支持语种: 中文、英语等 100+ 语种
-    """
+    """DashScope Qwen Embedding V4"""
 
     def __init__(
         self,
@@ -49,16 +32,7 @@ class DashScopeEmbeddings(OpenAIEmbeddings):
         base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1",
         **kwargs,
     ) -> None:
-        """初始化 DashScope Embeddings
-
-        Args:
-            model: 模型名称，默认 text-embedding-v4
-            dimensions: 向量维度，可选 64/128/256/512/768/1024/1536/2048
-            api_key: DashScope API Key
-            base_url: API 基础 URL
-            **kwargs: 其他参数
-        """
-        # 验证维度参数
+        """初始化 DashScope Embeddings"""
         valid_dimensions = {64, 128, 256, 512, 768, 1024, 1536, 2048}
         if dimensions not in valid_dimensions:
             logger.warning(
@@ -68,7 +42,6 @@ class DashScopeEmbeddings(OpenAIEmbeddings):
             )
             dimensions = 1024
 
-        # 使用环境变量中的 API Key
         if api_key is None:
             api_key = settings.dashscope_api_key
 
@@ -98,17 +71,7 @@ def get_embeddings(
     model: str | None = None,
     dimensions: int | None = None,
 ) -> OpenAIEmbeddings:
-    """获取 Embeddings 实例
-
-    Args:
-        provider: 提供商名称，默认从配置读取
-        model: 模型名称
-        dimensions: 向量维度（仅部分提供商支持）
-
-    Returns:
-        Embeddings 实例
-    """
-    # 从配置获取默认提供商
+    """获取 Embeddings 实例"""
     if provider is None:
         provider = getattr(settings, "embedding_provider", "openai")
 
@@ -118,7 +81,6 @@ def get_embeddings(
             dimensions=dimensions or getattr(settings, "embedding_dimensions", 1024),
         )
 
-    # OpenAI 兼容的提供商
     api_key = settings.llm_api_key
     base_url = settings.llm_base_url
 
@@ -133,7 +95,6 @@ def get_embeddings(
     raise ValueError(f"Unsupported embedding provider: {provider}")
 
 
-# 导出
 __all__ = [
     "EmbeddingProvider",
     "DashScopeEmbeddings",

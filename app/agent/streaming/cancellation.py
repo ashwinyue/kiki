@@ -1,8 +1,6 @@
 """流式处理取消支持
 
 提供 CancellationToken 类，支持优雅中断 LangGraph 流式响应。
-
-参考 WeKnora 的实现：internal/handler/session.go 的 Stop 处理
 """
 
 from __future__ import annotations

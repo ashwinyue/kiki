@@ -1,12 +1,6 @@
 """流继续管理器
 
 提供活跃流式会话注册表和客户端重连支持。
-对齐 WeKnora 的 sessions/continue-stream/{id} 实现。
-
-核心功能：
-- ActiveStreamRegistry: 跟踪活跃流
-- 支持客户端断线重连
-- 流事件缓冲和回放
 """
 
 from __future__ import annotations

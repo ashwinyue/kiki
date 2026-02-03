@@ -1,4 +1,4 @@
-"""依赖注入模块
+"""配置依赖注入模块
 
 提供 FastAPI 依赖注入提供者，替代全局单例模式。
 """
@@ -11,16 +11,14 @@ from app.config.settings import Settings, get_settings
 from app.observability.logging import get_logger
 
 if TYPE_CHECKING:
-    from app.agent import ChatAgent  # 使用 ChatAgent 替代已废弃的 LangGraphAgent
     from app.agent.memory.base import BaseLongTermMemory
     from app.agent.memory.context import ContextManager
     from app.agent.memory.manager import MemoryManager, MemoryManagerFactory
-    from app.llm import LLMService
 
 logger = get_logger(__name__)
 
 
-# ============== LLM Service ==============
+# LLM Service
 
 
 @lru_cache
@@ -32,120 +30,15 @@ def _get_llm_service_cached():  # -> LLMService (使用字符串避免循环导�
 
 
 async def get_llm_service_dep():  # -> AsyncIterator[LLMService]
-    """LLM 服务依赖注入提供者
-
-    Returns:
-        LLMService 实例
-    """
+    """LLM 服务依赖注入提供者"""
     llm_service = _get_llm_service_cached()
     try:
         yield llm_service
     finally:
-        # LLM 服务是无状态的，不需要清理
         pass
 
 
-# ============== Agent ==============
-
-
-class AgentContainer:
-    """Agent 容器
-
-    管理 Agent 实例的生命周期，支持多租户隔离。
-    """
-
-    def __init__(self) -> None:
-        self._agents: dict[str, "ChatAgent"] = {}
-        self._default_agent: "ChatAgent | None" = None
-
-    async def get_agent(
-        self,
-        session_id: str | None = None,
-        user_id: str | None = None,
-    ) -> "ChatAgent":
-        """获取 Agent 实例
-
-        Args:
-            session_id: 会话 ID（用于多租户隔离）
-            user_id: 用户 ID
-
-        Returns:
-            ChatAgent 实例
-        """
-        # 如果没有会话 ID，返回默认 Agent
-        if not session_id:
-            if self._default_agent is None:
-                from app.agent import ChatAgent
-
-                self._default_agent = ChatAgent()
-            return self._default_agent
-
-        # 为每个会话创建独立的 Agent（支持多租户隔离）
-        if session_id not in self._agents:
-            from app.agent import ChatAgent
-
-            self._agents[session_id] = ChatAgent()
-            logger.debug("agent_created_for_session", session_id=session_id)
-
-        return self._agents[session_id]
-
-    async def close_session(self, session_id: str) -> None:
-        """关闭会话的 Agent
-
-        Args:
-            session_id: 会话 ID
-        """
-        if session_id in self._agents:
-            await self._agents[session_id].close()
-            del self._agents[session_id]
-            logger.debug("agent_closed_for_session", session_id=session_id)
-
-    async def close_all(self) -> None:
-        """关闭所有 Agent"""
-        for agent in self._agents.values():
-            await agent.close()
-        self._agents.clear()
-        if self._default_agent:
-            await self._default_agent.close()
-            self._default_agent = None
-
-
-# 全局容器
-_agent_container = AgentContainer()
-
-
-async def get_agent_dep(
-    session_id: str | None = None,
-    user_id: str | None = None,
-) -> AsyncIterator["ChatAgent"]:
-    """Agent 依赖注入提供者
-
-    Args:
-        session_id: 会话 ID
-        user_id: 用户 ID
-
-    Returns:
-        ChatAgent 实例
-
-    Examples:
-        ```python
-        @app.post("/chat")
-        async def chat(
-            agent: Annotated[ChatAgent, Depends(get_agent_dep)],
-            message: str,
-        ):
-            # ...
-        ```
-    """
-    agent = await _agent_container.get_agent(session_id, user_id)
-    try:
-        yield agent
-    except Exception:
-        logger.error("agent_dependency_error", session_id=session_id)
-        raise
-
-
-# ============== Memory Manager ==============
+# Memory Manager
 
 
 async def get_memory_manager_dep(
@@ -153,26 +46,7 @@ async def get_memory_manager_dep(
     user_id: str | None = None,
     long_term_memory: "BaseLongTermMemory | None" = None,
 ) -> AsyncIterator["MemoryManager"]:
-    """Memory Manager 依赖注入提供者
-
-    Args:
-        session_id: 会话 ID
-        user_id: 用户 ID
-        long_term_memory: 长期记忆实例（通过依赖注入）
-
-    Returns:
-        MemoryManager 实例
-
-    Examples:
-        ```python
-        @app.post("/chat")
-        async def chat(
-            memory: Annotated[MemoryManager, Depends(get_memory_manager_dep)],
-            message: str,
-        ):
-            # ...
-        ```
-    """
+    """Memory Manager 依赖注入提供者"""
     memory_manager = MemoryManager(
         session_id=session_id,
         user_id=user_id,
@@ -184,64 +58,37 @@ async def get_memory_manager_dep(
         await memory_manager.close()
 
 
-# ============== Memory Manager Factory ==============
+# Memory Manager Factory
 
 
 def get_memory_manager_factory_dep() -> "MemoryManagerFactory":
-    """Memory Manager 工厂依赖注入提供者
-
-    Returns:
-        MemoryManagerFactory 实例
-
-    Examples:
-        ```python
-        @app.post("/chat")
-        async def chat(
-            factory: Annotated[MemoryManagerFactory, Depends(get_memory_manager_factory_dep)],
-            message: str,
-        ):
-            memory = factory.create(session_id="test-123", user_id="user-456")
-            # ...
-        ```
-    """
+    """Memory Manager 工厂依赖注入提供者"""
     return MemoryManagerFactory
 
 
-# ============== Context Manager ==============
+# Context Manager
 
 
 def get_context_manager_dep() -> "ContextManager":
-    """Context Manager 依赖注入提供者
-
-    Returns:
-        ContextManager 实例
-    """
+    """Context Manager 依赖注入提供者"""
     from app.agent.memory.context import get_context_manager
 
     return get_context_manager()
 
 
-# ============== Settings ==============
+# Settings
 
 
 def get_settings_dep() -> Settings:
-    """配置依赖注入提供者
-
-    Returns:
-        Settings 实例
-    """
+    """配置依赖注入提供者"""
     return get_settings()
 
 
-# ============== Checkpointer ==============
+# Checkpointer
 
 
 async def get_checkpointer_dep():
-    """Checkpointer 依赖注入提供者
-
-    Returns:
-        检查点保存器实例或 None
-    """
+    """Checkpointer 依赖注入提供者"""
     from app.config.settings import get_settings
 
     settings = get_settings()

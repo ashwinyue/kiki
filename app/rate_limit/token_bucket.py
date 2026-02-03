@@ -58,16 +58,11 @@ class TokenBucket:
         self.tokens = float(self.capacity)
 
     def refill(self) -> None:
-        """填充令牌
-
-        根据经过的时间计算应该填充的令牌数，
-        但不超过桶容量。
-        """
+        """根据经过的时间填充令牌，但不超过桶容量。"""
         now = time.monotonic()
         elapsed = now - self.updated_at
 
         if elapsed > 0:
-            # 计算新增令牌数
             new_tokens = elapsed * self.rate
             self.tokens = min(self.capacity, self.tokens + new_tokens)
             self.updated_at = now
@@ -94,7 +89,6 @@ class TokenBucket:
             remaining = int(self.tokens)
             return True, remaining, 0.0
 
-        # 令牌不足，计算需要等待的时间
         needed = tokens - self.tokens
         retry_after = needed / self.rate if self.rate > 0 else float("inf")
         return False, 0, retry_after
@@ -129,13 +123,12 @@ class RateLimitPolicy:
     exempt_paths: set[str] = field(default_factory=set)
     ttl_seconds: int = 600
 
-    # 预定义策略
-    CHAT = lambda cls: cls(rate=0.5, burst_capacity=10)  # 2 req/s，突发 10
-    CHAT_STREAM = lambda cls: cls(rate=0.33, burst_capacity=5)  # 3 req/s，突发 5
-    API = lambda cls: cls(rate=10.0, burst_capacity=50)  # 10 req/s，突发 50
-    HEALTH = lambda cls: cls(rate=20.0, burst_capacity=20)  # 20 req/s
-    REGISTER = lambda cls: cls(rate=0.1, burst_capacity=5)  # 10 req/min
-    LOGIN = lambda cls: cls(rate=0.33, burst_capacity=10)  # 3 req/s，突发 10
+    CHAT = lambda cls: cls(rate=0.5, burst_capacity=10)
+    CHAT_STREAM = lambda cls: cls(rate=0.33, burst_capacity=5)
+    API = lambda cls: cls(rate=10.0, burst_capacity=50)
+    HEALTH = lambda cls: cls(rate=20.0, burst_capacity=20)
+    REGISTER = lambda cls: cls(rate=0.1, burst_capacity=5)
+    LOGIN = lambda cls: cls(rate=0.33, burst_capacity=10)
 
 
 class TokenBucketRateLimiter(BaseHTTPMiddleware):
@@ -196,39 +189,21 @@ class TokenBucketRateLimiter(BaseHTTPMiddleware):
         self.ttl_seconds = ttl_seconds
         self.max_buckets = max_buckets
 
-        # 存储每个键的令牌桶
         self._buckets: dict[str, TokenBucket] = {}
         self._last_seen: dict[str, float] = {}
         self._lock = asyncio.Lock()
 
-        # 响应头策略名称
         self._policy_name = f"token_bucket; rate={self.rate}/s; burst={self.capacity}"
 
     def _default_key_func(self, request: Request) -> str:
-        """默认的限流键提取函数
-
-        优先级：
-        1. X-User-ID 头
-        2. X-Forwarded-For 头（第一个 IP）
-        3. X-Real-IP 头
-        4. 客户端 IP
-
-        Args:
-            request: FastAPI 请求对象
-
-        Returns:
-            str: 限流键
-        """
-        # 尝试从请求状态获取用户 ID
+        """限流键提取函数，优先级：X-User-ID > X-Forwarded-For > X-Real-IP > 客户端 IP。"""
         if hasattr(request.state, "user_id") and request.state.user_id:
             return f"user:{request.state.user_id}"
 
-        # 尝试从请求头获取用户 ID
         user_id = request.headers.get("X-User-ID")
         if user_id:
             return f"user:{user_id}"
 
-        # 尝试从请求头获取 IP
         xff = request.headers.get("X-Forwarded-For")
         if xff:
             ip = xff.split(",")[0].strip()
@@ -238,7 +213,6 @@ class TokenBucketRateLimiter(BaseHTTPMiddleware):
         if xri:
             return f"ip:{xri}"
 
-        # 使用客户端 IP
         if request.client:
             return f"ip:{request.client.host}"
 
@@ -264,7 +238,7 @@ class TokenBucketRateLimiter(BaseHTTPMiddleware):
             return self._buckets[key]
 
     async def _cleanup_expired_buckets(self) -> None:
-        """清理过期的令牌桶"""
+        """清理过期的令牌桶并防止内存泄漏。"""
         now = time.monotonic()
         cutoff = now - self.ttl_seconds
 
@@ -278,9 +252,7 @@ class TokenBucketRateLimiter(BaseHTTPMiddleware):
                 self._buckets.pop(key, None)
                 self._last_seen.pop(key, None)
 
-            # 防止内存泄漏
             if len(self._buckets) > self.max_buckets:
-                # 按 last_seen 排序，删除最旧的
                 sorted_keys = sorted(
                     self._last_seen.items(),
                     key=lambda x: x[1],

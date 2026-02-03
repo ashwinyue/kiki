@@ -7,12 +7,12 @@ from typing import Any, TYPE_CHECKING
 from datetime import datetime
 
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Column, Field, Relationship, SQLModel
+from sqlmodel import Column, Field, SQLModel
 
 from app.models.timestamp import TimestampMixin
 
 if TYPE_CHECKING:
-    from app.models.agent_execution import AgentExecution
+    pass
 
 
 class SessionBase(SQLModel):
@@ -38,30 +38,24 @@ class Session(TimestampMixin, SessionBase, table=True):
     knowledge_base_id: str | None = Field(default=None, max_length=36)
     agent_id: str | None = Field(default=None, max_length=36)
 
-    # ========== Multi-Agent 配置 ==========
-    # 图类型：single, supervisor, router, hierarchical
     graph_type: str = Field(
         default="single",
         max_length=50,
         description="图类型: single, supervisor, router, hierarchical",
     )
 
-    # 主要 Agent ID（single 模式使用）
     primary_agent_id: str | None = Field(
         default=None,
         max_length=64,
         description="主要 Agent ID（single 模式使用）",
     )
 
-    # Supervisor 配置（supervisor 模式使用）
     supervisor_config: Any | None = Field(
         default=None,
         sa_column=Column(JSONB),
         description="Supervisor 配置（supervisor 模式使用）",
     )
 
-    # ========== 保留的兼容字段（建议移至 AgentConfig） ==========
-    # TODO: 这些字段未来应移至 AgentConfig.config
     max_rounds: int = Field(default=5)
     enable_rewrite: bool = Field(default=True)
     fallback_strategy: str = Field(default="fixed", max_length=255)
@@ -104,8 +98,6 @@ class SessionUpdate(SQLModel):
     knowledge_base_id: str | None = None
     agent_id: str | None = None
     agent_config: Any | None = None
-
-    # Multi-Agent 配置
     graph_type: str | None = None
     primary_agent_id: str | None = None
     supervisor_config: Any | None = None
@@ -120,8 +112,6 @@ class SessionPublic(SessionBase):
     knowledge_base_id: str | None
     agent_id: str | None
     created_at: datetime
-
-    # Multi-Agent 配置
     graph_type: str
 
 

@@ -1,8 +1,6 @@
 """配置管理模块"""
 
 from app.config.dependencies import (
-    AgentContainer,
-    get_agent_dep,
     get_checkpointer_dep,
     get_context_manager_dep,
     get_llm_service_dep,
@@ -20,6 +18,15 @@ from app.config.errors import (
     get_user_friendly_message,
     handle_tool_error,
 )
+from app.config.loader import (
+    get_bool_env,
+    get_float_env,
+    get_int_env,
+    get_list_env,
+    get_str_env,
+    load_yaml_config,
+    reload_config,
+)
 from app.config.runtime import (
     AgentRuntimeConfig,
     Configuration,
@@ -36,9 +43,7 @@ __all__ = [
     "AgentRuntimeConfig",
     "get_runtime_config",
     "get_agent_runtime_config",
-    "AgentContainer",
     "get_llm_service_dep",
-    "get_agent_dep",
     "get_memory_manager_dep",
     "get_memory_manager_factory_dep",
     "get_context_manager_dep",
@@ -51,4 +56,12 @@ __all__ = [
     "get_user_friendly_message",
     "handle_tool_error",
     "default_retry_strategy",
+    # YAML 配置加载器
+    "get_bool_env",
+    "get_float_env",
+    "get_int_env",
+    "get_list_env",
+    "get_str_env",
+    "load_yaml_config",
+    "reload_config",
 ]

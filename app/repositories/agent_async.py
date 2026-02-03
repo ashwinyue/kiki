@@ -17,12 +17,8 @@ from app.repositories.base import BaseRepository, PaginatedResult, PaginationPar
 
 logger = get_logger(__name__)
 
-# 向后兼容别名
-Agent = AgentConfig
-CustomAgent = AgentConfig  # 向后兼容
 
-
-class AgentRepositoryAsync(BaseRepository[Agent]):
+class AgentRepositoryAsync(BaseRepository[AgentConfig]):
     """Agent 异步仓储
 
     提供 Agent 配置的异步 CRUD 操作。
@@ -34,9 +30,9 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
         Args:
             session: 异步数据库会话
         """
-        super().__init__(Agent, session)
+        super().__init__(AgentConfig, session)
 
-    async def create_with_tools(self, data: dict[str, Any]) -> Agent:
+    async def create_with_tools(self, data: dict[str, Any]) -> AgentConfig:
         """创建 Agent
 
         Args:
@@ -45,7 +41,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
         Returns:
             创建的 Agent
         """
-        agent = Agent(**data)
+        agent = AgentConfig(**data)
         self.session.add(agent)
         await self.session.flush()
 
@@ -55,7 +51,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
         logger.info("agent_created", agent_id=agent.id, name=agent.name)
         return agent
 
-    async def get_by_name(self, name: str) -> Agent | None:
+    async def get_by_name(self, name: str) -> AgentConfig | None:
         """根据名称获取 Agent
 
         Args:
@@ -65,7 +61,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
             Agent 实例或 None
         """
         try:
-            statement = select(Agent).where(Agent.name == name)
+            statement = select(AgentConfig).where(AgentConfig.name == name)
             result = await self.session.execute(statement)
             return result.scalar_one_or_none()
         except Exception as e:
@@ -76,7 +72,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
         self,
         tenant_id: int | None = None,
         params: PaginationParams | None = None,
-    ) -> PaginatedResult[Agent]:
+    ) -> PaginatedResult[AgentConfig]:
         """按租户分页列出 Agent
 
         Args:
@@ -87,16 +83,16 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
             分页结果
         """
         try:
-            statement = select(Agent)
+            statement = select(AgentConfig)
 
             if tenant_id is not None:
-                statement = statement.where(Agent.tenant_id == tenant_id)
+                statement = statement.where(AgentConfig.tenant_id == tenant_id)
 
             # 排除已删除的
-            statement = statement.where(Agent.deleted_at.is_(None))
+            statement = statement.where(AgentConfig.deleted_at.is_(None))
 
             # 按创建时间倒序
-            statement = statement.order_by(desc(Agent.created_at))
+            statement = statement.order_by(desc(AgentConfig.created_at))
 
             # 获取总数
             from sqlalchemy import func
@@ -125,7 +121,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
         self,
         agent_id: str,
         data: dict[str, Any],
-    ) -> Agent | None:
+    ) -> AgentConfig | None:
         """更新 Agent
 
         Args:
@@ -188,7 +184,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
         new_description: str | None = None,
         new_config: dict[str, Any] | None = None,
         created_by: str | None = None,
-    ) -> Agent | None:
+    ) -> AgentConfig | None:
         """复制 Agent
 
         Args:
@@ -221,7 +217,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
             }
 
             # 创建新 Agent
-            new_agent = Agent(**agent_data)
+            new_agent = AgentConfig(**agent_data)
             self.session.add(new_agent)
             await self.session.flush()
 
@@ -245,7 +241,7 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
         self,
         tenant_id: int | None = None,
         params: PaginationParams | None = None,
-    ) -> PaginatedResult[Agent]:
+    ) -> PaginatedResult[AgentConfig]:
         """按租户分页列出 Agent（包含工具关联）
 
         Args:
@@ -256,16 +252,16 @@ class AgentRepositoryAsync(BaseRepository[Agent]):
             分页结果
         """
         try:
-            statement = select(Agent)
+            statement = select(AgentConfig)
 
             if tenant_id is not None:
-                statement = statement.where(Agent.tenant_id == tenant_id)
+                statement = statement.where(AgentConfig.tenant_id == tenant_id)
 
             # 排除已删除的
-            statement = statement.where(Agent.deleted_at.is_(None))
+            statement = statement.where(AgentConfig.deleted_at.is_(None))
 
             # 按创建时间倒序
-            statement = statement.order_by(desc(Agent.created_at))
+            statement = statement.order_by(desc(AgentConfig.created_at))
 
             # 获取总数
             from sqlalchemy import func

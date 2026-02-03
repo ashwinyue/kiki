@@ -50,7 +50,8 @@ LLMType = Literal[
 
 # ============== Agent-LLM 映射 ==============
 
-AGENT_LLM_MAP: dict[str, LLMType] = {
+# 默认 Agent-LLM 映射
+_DEFAULT_AGENT_LLM_MAP: dict[str, LLMType] = {
     # ========== Supervisor 模式 ==========
     "supervisor": "reasoning",  # Supervisor 需要理解全局，使用推理模型
     "router": "basic",          # Router 只需要简单路由，使用基础模型
@@ -70,6 +71,53 @@ AGENT_LLM_MAP: dict[str, LLMType] = {
     # ========== 工具调用型 ==========
     "tools": "basic",           # 工具调用，基础模型
 }
+
+
+def _load_agent_llm_mapping() -> dict[str, LLMType]:
+    """从 YAML 加载 Agent-LLM 映射
+
+    YAML 格式示例：
+    ```yaml
+    AGENT_LLM_MAPPING:
+      coordinator: basic
+      planner: reasoning
+      coder: code
+    ```
+    """
+    import os
+
+    # 复制默认映射
+    agent_llm_map = _DEFAULT_AGENT_LLM_MAP.copy()
+
+    config_file = os.getenv("KIKI_CONFIG_FILE", "conf.yaml")
+    if not os.path.exists(config_file):
+        return agent_llm_map
+
+    try:
+        import yaml
+
+        with open(config_file, encoding="utf-8") as f:
+            yaml_config = yaml.safe_load(f) or {}
+
+        # 更新映射
+        if "AGENT_LLM_MAPPING" in yaml_config:
+            for agent_type, llm_type_str in yaml_config["AGENT_LLM_MAPPING"].items():
+                if llm_type_str in ("reasoning", "basic", "vision", "code"):
+                    agent_llm_map[agent_type] = LLMType(llm_type_str)
+                    logger.debug(
+                        "agent_llm_mapping_loaded",
+                        agent_type=agent_type,
+                        llm_type=llm_type_str,
+                    )
+
+    except Exception as e:
+        logger.warning("agent_llm_mapping_load_failed", error=str(e))
+
+    return agent_llm_map
+
+
+# 加载 Agent-LLM 映射（可以从 YAML 覆盖）
+AGENT_LLM_MAP: dict[str, LLMType] = _load_agent_llm_mapping()
 
 
 # ============== 分层 LLM 配置 ==============
@@ -126,6 +174,75 @@ LLM_CONFIG: dict[LLMType, LLMTierConfig] = {
 _llm_cache: dict[LLMType, BaseChatModel] = {}
 
 
+def _load_config_from_yaml() -> None:
+    """从 YAML 配置文件加载 LLM 配置
+
+    YAML 格式示例：
+    ```yaml
+    REASONING_MODEL:
+      model: "deepseek-reasoner"
+      provider: "deepseek"
+      temperature: 0.6
+      max_tokens: 100000
+
+    BASIC_MODEL:
+      model: "gpt-4o"
+      provider: "openai"
+      temperature: 0.7
+    ```
+    """
+    import os
+
+    config_file = os.getenv("KIKI_CONFIG_FILE", "conf.yaml")
+    if not os.path.exists(config_file):
+        return
+
+    try:
+        import yaml
+
+        with open(config_file, encoding="utf-8") as f:
+            yaml_config = yaml.safe_load(f) or {}
+
+        # 映射 YAML 配置键到 LLM 类型
+        yaml_key_to_llm_type: dict[str, LLMType] = {
+            "REASONING_MODEL": "reasoning",
+            "BASIC_MODEL": "basic",
+            "CODE_MODEL": "code",
+            "VISION_MODEL": "vision",
+        }
+
+        for yaml_key, llm_type in yaml_key_to_llm_type.items():
+            if yaml_key not in yaml_config:
+                continue
+
+            model_config = yaml_config[yaml_key]
+            if not isinstance(model_config, dict):
+                continue
+
+            current_config = LLM_CONFIG[llm_type]
+            update_dict: dict[str, object] = {}
+
+            if "model" in model_config:
+                update_dict["model"] = model_config["model"]
+            if "provider" in model_config:
+                update_dict["provider"] = model_config["provider"]
+            if "temperature" in model_config:
+                update_dict["temperature"] = float(model_config["temperature"])
+            if "max_tokens" in model_config:
+                update_dict["max_tokens"] = int(model_config["max_tokens"])
+            if "base_url" in model_config:
+                update_dict["base_url"] = model_config["base_url"]
+            if "api_key" in model_config:
+                update_dict["api_key_env"] = model_config["api_key"]
+
+            if update_dict:
+                LLM_CONFIG[llm_type] = current_config.model_copy(update=update_dict)
+                logger.info("llm_config_loaded_from_yaml", llm_type=llm_type)
+
+    except Exception as e:
+        logger.warning("yaml_config_load_failed", error=str(e))
+
+
 def _load_config_from_settings() -> None:
     """从环境变量加载 LLM 配置
 
@@ -170,7 +287,8 @@ def _load_config_from_settings() -> None:
                     LLM_CONFIG[llm_type] = current_config.model_copy(update={"base_url": value})
 
 
-# 初始化时加载环境变量配置
+# 初始化时先加载 YAML 配置，再加载环境变量配置（环境变量优先级更高）
+_load_config_from_yaml()
 _load_config_from_settings()
 
 

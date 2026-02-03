@@ -12,6 +12,8 @@
 - search_database: 数据库搜索工具示例
 - get_weather: 天气查询工具示例
 - calculate: 数学计算工具示例
+
+注意：RAG 知识库工具已移至服务层，请使用 app.agent.rag.create_rag_tool_for_agent() 为 Agent 动态创建专属工具。
 """
 
 from app.agent.tools.builtin.calculation import calculate
@@ -21,11 +23,6 @@ from app.agent.tools.builtin.crawl import (
     crawl_url,
 )
 from app.agent.tools.builtin.database import search_database
-from app.agent.tools.builtin.rag import (
-    add_knowledge,
-    clear_knowledge_base,
-    search_knowledge_base,
-)
 from app.agent.tools.builtin.python_repl import (
     SafePythonREPL,
     get_repl,
@@ -61,10 +58,6 @@ __all__ = [
     "search_database",
     "get_weather",
     "calculate",
-    # RAG 知识库
-    "search_knowledge_base",
-    "add_knowledge",
-    "clear_knowledge_base",
     # 工具类
     "TavilySearchTool",
 ]

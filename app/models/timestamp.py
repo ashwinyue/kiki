@@ -10,7 +10,6 @@ from datetime import datetime
 from typing import ClassVar
 
 from sqlalchemy import Column, DateTime, func
-from sqlalchemy.orm import declared_attr
 from sqlmodel import Field, SQLModel
 
 

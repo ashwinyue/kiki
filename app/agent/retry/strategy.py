@@ -1,21 +1,6 @@
 """重试策略配置模块
 
 定义重试策略枚举和配置类。
-
-使用示例:
-```python
-from app.agent.retry.strategy import RetryStrategy, RetryPolicy, get_default_retry_policy
-
-# 创建重试策略
-policy = RetryPolicy(
-    max_attempts=3,
-    strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
-    initial_interval=1.0,
-)
-
-# 使用默认策略
-default_policy = get_default_retry_policy()
-```
 """
 
 import random
@@ -32,10 +17,10 @@ logger = get_logger(__name__)
 class RetryStrategy(str, Enum):
     """重试策略枚举"""
 
-    EXPONENTIAL_BACKOFF = "exponential_backoff"  # 指数退避
-    LINEAR_BACKOFF = "linear_backoff"  # 线性退避
-    FIXED_INTERVAL = "fixed_interval"  # 固定间隔
-    IMMEDIATE = "immediate"  # 立即重试
+    EXPONENTIAL_BACKOFF = "exponential_backoff"
+    LINEAR_BACKOFF = "linear_backoff"
+    FIXED_INTERVAL = "fixed_interval"
+    IMMEDIATE = "immediate"
 
 
 @dataclass

@@ -85,19 +85,16 @@ from app.schemas.web_search import (
 )
 
 __all__ = [
-    # 统一响应
     "ApiResponse",
     "DataResponse",
     "PaginatedResponse",
     "PaginationMeta",
-    # 聊天
     "ChatRequest",
     "StreamChatRequest",
     "ChatResponse",
     "Message",
     "ChatHistoryResponse",
     "SSEEvent",
-    # Agent - CRUD
     "AgentConfig",
     "AgentRequest",
     "AgentPublic",
@@ -107,40 +104,33 @@ __all__ = [
     "AgentCopyResponse",
     "BatchAgentCopyRequest",
     "BatchAgentCopyResponse",
-    # 租户
     "TenantListResponse",
     "ApiKeyResponse",
     "TenantItem",
     "TenantSearchRequest",
     "TenantSearchResponse",
-    # MCP 服务
     "MCPServiceRequest",
     "MCPServiceResponse",
     "MCPServiceListResponse",
-    # 工具
     "ToolInfo",
     "ToolsListResponse",
-    # 会话
     "SessionCreate",
     "SessionUpdate",
     "SessionResponse",
     "SessionDetailResponse",
     "SessionListResponse",
     "GenerateTitleRequest",
-    # 消息
     "MessageResponse",
     "MessageUpdate",
     "MessageRegenerateRequest",
     "MessageListResponse",
     "MessageSearchResponse",
-    # 模型
     "ModelType",
     "ModelSource",
     "ModelParameters",
     "ModelCreate",
     "ModelUpdate",
     "ModelResponse",
-    # 网络搜索
     "WebSearchConfig",
     "WebSearchResult",
     "WebSearchProviderInfo",

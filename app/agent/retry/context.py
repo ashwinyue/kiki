@@ -1,17 +1,6 @@
 """重试上下文管理器模块
 
 提供用于执行可重试操作的上下文管理器。
-
-使用示例:
-```python
-from app.agent.retry.context import RetryContext
-from app.agent.retry.strategy import RetryPolicy
-
-policy = RetryPolicy(max_attempts=3)
-
-async with RetryContext(policy) as retry:
-    await retry.attempt(risky_operation)
-```
 """
 
 import asyncio

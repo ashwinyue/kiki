@@ -12,11 +12,8 @@ from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
-# 注册表
 registry = CollectorRegistry()
 
-
-# HTTP 请求指标
 http_requests_total = Counter(
     "http_requests_total",
     "HTTP 请求总数",
@@ -32,7 +29,6 @@ http_request_duration_seconds = Histogram(
     registry=registry,
 )
 
-# Agent 指标
 agent_requests_total = Counter(
     "agent_requests_total",
     "Agent 请求总数",
@@ -48,7 +44,6 @@ agent_duration_seconds = Histogram(
     registry=registry,
 )
 
-# LLM 指标
 llm_requests_total = Counter(
     "llm_requests_total",
     "LLM 请求总数",
@@ -71,7 +66,6 @@ llm_tokens_total = Counter(
     registry=registry,
 )
 
-# 工具调用指标
 tool_calls_total = Counter(
     "tool_calls_total",
     "工具调用总数",
@@ -87,7 +81,6 @@ tool_duration_seconds = Histogram(
     registry=registry,
 )
 
-# 数据库指标
 db_connections_active = Gauge(
     "db_connections_active",
     "活跃数据库连接数",
@@ -109,7 +102,6 @@ db_query_duration_seconds = Histogram(
     registry=registry,
 )
 
-# 系统指标
 active_sessions = Gauge(
     "active_sessions",
     "活跃会话数",

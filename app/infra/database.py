@@ -40,9 +40,6 @@ _engine_lock = Lock()
 _session_factory_lock = Lock()
 
 
-# ============== 连接池单例管理器 ==============
-
-
 class DatabaseConnectionPool:
     """数据库连接池单例管理器
 
@@ -280,15 +277,6 @@ async def transaction(
             raise
 
 
-# ============== 仓储工厂方法 (已移除，避免循环导入) ==============
-
-# 这些工厂方法已移到各自的 Repository 类中
-# 直接使用: UserRepository(session) 替代 user_repository(session)
-
-
-# ============== 健康检查 ==============
-
-
 async def health_check() -> bool:
     """检查数据库连接健康状态
 
@@ -304,9 +292,6 @@ async def health_check() -> bool:
     except Exception as e:
         logger.error("database_health_check_failed", error=str(e))
         return False
-
-
-# ============== 便捷函数 ==============
 
 
 async def close_db():

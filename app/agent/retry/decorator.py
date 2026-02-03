@@ -1,16 +1,6 @@
 """重试装饰器模块
 
 提供为函数添加重试能力的装饰器。
-
-使用示例:
-```python
-from app.agent.retry.decorator import with_retry
-
-@with_retry(max_attempts=3)
-async def risky_operation():
-    # 可能失败的操作
-    pass
-```
 """
 
 import asyncio

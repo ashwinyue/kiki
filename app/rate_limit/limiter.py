@@ -26,24 +26,20 @@ def _get_identifier(request) -> str:
     Returns:
         限流标识符
     """
-    # 尝试从请求状态获取用户 ID
     if hasattr(request.state, "user_id") and request.state.user_id:
         return f"user:{request.state.user_id}"
 
-    # 尝试从请求头获取用户 ID
     user_id = request.headers.get("X-User-ID")
     if user_id:
         return f"user:{user_id}"
 
-    # 使用 IP 地址
     return get_remote_address(request)
 
 
-# 初始化限流器
 limiter = Limiter(
     key_func=_get_identifier,
     default_limits=["200 per day", "50 per hour"],
-    storage_uri=settings.redis_url,  # 使用 Redis 实现分布式限流
+    storage_uri=settings.redis_url,
     enabled=settings.is_development or settings.is_production,
 )
 
@@ -70,12 +66,11 @@ async def rate_limit_exceeded_handler(request, exc: RateLimitExceeded):
         content={
             "error": "Rate limit exceeded",
             "detail": f"请求过于频繁，请稍后再试。限制: {exc.description}",
-            "retry_after": 60,  # 建议重试时间（秒）
+            "retry_after": 60,
         },
     )
 
 
-# 便捷装饰器
 def limit(
     limit_value: str,
     per_method: bool = True,
@@ -100,7 +95,6 @@ def limit(
     return limiter.limit(limit_value, per_method=per_method)
 
 
-# 预定义的限流规则
 class RateLimit:
     """预定义的限流规则"""
 

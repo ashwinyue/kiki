@@ -1,21 +1,6 @@
 """多模型提供商路由系统
 
 支持基于优先级（成本/质量/速度）的自动模型选择。
-符合 langgraph-agents 最佳实践。
-
-使用示例:
-```python
-from app.llm_providers import get_llm_for_task, LLMPriority
-
-# 成本优化（简单任务）
-llm_cheap = get_llm_for_task(priority=LLMPriority.COST)
-
-# 质量优先（复杂任务）
-llm_smart = get_llm_for_task(priority=LLMPriority.QUALITY)
-
-# 速度优先
-llm_fast = get_llm_for_task(priority=LLMPriority.SPEED)
-```
 """
 
 from abc import ABC, abstractmethod
@@ -35,17 +20,16 @@ settings = get_settings()
 class LLMPriority(str, Enum):
     """LLM 选择优先级
 
-    参考 langgraph-agents 技能的标准：
     - COST: 成本优先，选择最便宜的模型
     - QUALITY: 质量优先，选择最强推理能力的模型
     - SPEED: 速度优先，选择响应最快的模型
     - BALANCED: 平衡模式，性能与成本折中
     """
 
-    COST = "cost"  # 成本优先
-    QUALITY = "quality"  # 质量优先
-    SPEED = "speed"  # 速度优先
-    BALANCED = "balanced"  # 平衡模式
+    COST = "cost"
+    QUALITY = "quality"
+    SPEED = "speed"
+    BALANCED = "balanced"
 
 
 @dataclass(frozen=True)
@@ -69,9 +53,7 @@ class ModelConfig:
     reasoning_score: int
 
 
-# 预定义的模型配置（按优先级分组）
 _MODEL_REGISTRY: dict[LLMPriority, list[ModelConfig]] = {
-    # 成本优先模型（从便宜到贵排序）
     LLMPriority.COST: [
         ModelConfig(
             name="deepseek-chat",
@@ -98,7 +80,6 @@ _MODEL_REGISTRY: dict[LLMPriority, list[ModelConfig]] = {
             reasoning_score=6,
         ),
     ],
-    # 质量优先模型（从强到弱排序）
     LLMPriority.QUALITY: [
         ModelConfig(
             name="claude-opus-4-20250514",
@@ -141,7 +122,6 @@ _MODEL_REGISTRY: dict[LLMPriority, list[ModelConfig]] = {
             reasoning_score=8,
         ),
     ],
-    # 速度优先模型（从快到慢排序）
     LLMPriority.SPEED: [
         ModelConfig(
             name="gpt-4o-mini",
@@ -168,7 +148,6 @@ _MODEL_REGISTRY: dict[LLMPriority, list[ModelConfig]] = {
             reasoning_score=6,
         ),
     ],
-    # 平衡模式
     LLMPriority.BALANCED: [
         ModelConfig(
             name="claude-sonnet-4-20250514",
@@ -347,26 +326,14 @@ _PROVIDERS: dict[str, type[BaseLLMProvider]] = {
 
 
 def get_provider(provider_name: str) -> BaseLLMProvider:
-    """获取提供商实例
-
-    Args:
-        provider_name: 提供商名称
-
-    Returns:
-        提供商实例
-
-    Raises:
-        LLMProviderError: 如果提供商不存在
-    """
+    """获取提供商实例"""
     provider_class = _PROVIDERS.get(provider_name)
     if provider_class is None:
         raise LLMProviderError(f"未知的提供商: {provider_name}")
 
-    # 特殊处理：某些提供商不需要初始化参数
     if provider_name in ("deepseek", "dashscope", "ollama"):
         return provider_class()
 
-    # 通用提供商需要 API key
     api_key = settings.llm_api_key
     if not api_key:
         raise LLMProviderError(f"{provider_name} API key 未配置")
@@ -379,38 +346,11 @@ def get_llm_for_task(
     fallback_priority: LLMPriority | None = None,
     **model_kwargs,
 ) -> BaseChatModel:
-    """根据任务优先级获取 LLM
-
-    这是 langgraph-agents 技能推荐的核心函数。
-
-    Args:
-        priority: 任务优先级（成本/质量/速度/平衡）
-        fallback_priority: 回退优先级（如果首选不可用）
-        **model_kwargs: 模型参数覆盖（temperature, max_tokens 等）
-
-    Returns:
-        配置好的 LLM 实例
-
-    Raises:
-        LLMProviderError: 如果所有模型都不可用
-
-    Examples:
-        ```python
-        # 简单任务用便宜模型
-        llm_cheap = get_llm_for_task(priority=LLMPriority.COST)
-
-        # 复杂任务用强模型
-        llm_smart = get_llm_for_task(priority=LLMPriority.QUALITY)
-
-        # 需要快速响应
-        llm_fast = get_llm_for_task(priority=LLMPriority.SPEED)
-        ```
-    """
+    """根据任务优先级获取 LLM"""
     configs = _MODEL_REGISTRY.get(priority, [])
     if not configs:
         raise LLMProviderError(f"未找到优先级为 {priority} 的模型配置")
 
-    # 默认模型参数
     default_kwargs = {
         "temperature": settings.llm_temperature,
         "max_tokens": settings.llm_max_tokens,
@@ -439,7 +379,6 @@ def get_llm_for_task(
             )
             continue
 
-    # 回退到次选优先级
     if fallback_priority and fallback_priority != priority:
         logger.info("fallback_to_secondary_priority", priority=fallback_priority)
         return get_llm_for_task(fallback_priority, **model_kwargs)
@@ -448,14 +387,7 @@ def get_llm_for_task(
 
 
 def get_model_configs(priority: LLMPriority | None = None) -> list[ModelConfig]:
-    """获取模型配置列表
-
-    Args:
-        priority: 按优先级过滤，None 返回所有
-
-    Returns:
-        模型配置列表
-    """
+    """获取模型配置列表"""
     if priority:
         return _MODEL_REGISTRY.get(priority, []).copy()
 
@@ -466,25 +398,7 @@ def get_model_configs(priority: LLMPriority | None = None) -> list[ModelConfig]:
 
 
 def register_model_config(config: ModelConfig) -> None:
-    """注册自定义模型配置
-
-    Args:
-        config: 模型配置
-
-    Examples:
-        ```python
-        from app.llm_providers import register_model_config, ModelConfig, LLMPriority
-
-        register_model_config(ModelConfig(
-            name="my-custom-model",
-            provider="openai",
-            priority=LLMPriority.COST,
-            cost_per_1m_tokens=0.1,
-            avg_latency_ms=500,
-            reasoning_score=5,
-        ))
-        ```
-    """
+    """注册自定义模型配置"""
     if config.priority not in _MODEL_REGISTRY:
         _MODEL_REGISTRY[config.priority] = []
     _MODEL_REGISTRY[config.priority].append(config)
@@ -492,18 +406,13 @@ def register_model_config(config: ModelConfig) -> None:
 
 
 __all__ = [
-    # 优先级枚举
     "LLMPriority",
-    # 配置类
     "ModelConfig",
-    # 主要函数
     "get_llm_for_task",
     "get_model_configs",
     "register_model_config",
     "get_provider",
-    # 异常
     "LLMProviderError",
-    # 提供商类
     "BaseLLMProvider",
     "AnthropicProvider",
     "OpenAIProvider",

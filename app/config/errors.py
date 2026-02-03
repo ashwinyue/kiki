@@ -193,15 +193,7 @@ class RetryStrategy:
         self.max_delay = max_delay
 
     def should_retry(self, error: Exception, attempt: int) -> bool:
-        """判断是否应该重试
-
-        Args:
-            error: 异常对象
-            attempt: 当前尝试次数
-
-        Returns:
-            是否应该重试
-        """
+        """判断是否应该重试"""
         if attempt >= self.max_retries:
             return False
 
@@ -209,14 +201,7 @@ class RetryStrategy:
         return context.is_retryable
 
     def get_delay(self, attempt: int) -> float:
-        """获取重试延迟
-
-        Args:
-            attempt: 当前尝试次数
-
-        Returns:
-            延迟时间（秒）
-        """
+        """获取重试延迟"""
         delay = self.initial_delay * (self.backoff_factor**attempt)
         return min(delay, self.max_delay)
 
@@ -226,19 +211,7 @@ class RetryStrategy:
         *args,
         **kwargs,
     ) -> any:
-        """执行函数并在失败时重试
-
-        Args:
-            func: 要执行的函数
-            *args: 位置参数
-            **kwargs: 关键字参数
-
-        Returns:
-            函数执行结果
-
-        Raises:
-            Exception: 重试耗尽后抛出原始异常
-        """
+        """执行函数并在失败时重试"""
         import asyncio
 
         last_error = None
@@ -273,7 +246,6 @@ class RetryStrategy:
 
                 await asyncio.sleep(delay)
 
-        # 重试耗尽
         logger.error(
             "execution_failed_retry_exhausted",
             attempts=self.max_retries + 1,
@@ -282,5 +254,4 @@ class RetryStrategy:
         raise last_error
 
 
-# 默认重试策略
 default_retry_strategy = RetryStrategy()

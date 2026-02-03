@@ -1,0 +1,183 @@
+# Kiki Agent Framework 配置示例
+# 参考 DeerFlow 的配置管理设计
+#
+# 环境变量替换语法：
+#   api_key: $OPENAI_API_KEY
+#   base_url: ${API_BASE_URL:-https://api.openai.com}
+#
+# 使用方法：
+#   1. 复制为 conf.yaml
+#   2. 根据环境修改配置
+#   3. 在代码中：from app.config.loader import load_yaml_config; config = load_yaml_config("conf.yaml")
+
+# ========== 应用配置 ==========
+APP_NAME: "Kiki Agent Framework"
+DEBUG: false
+ENVIRONMENT: "development"  # development, staging, production
+
+# ========== 服务器配置 ==========
+HOST: "0.0.0.0"
+PORT: 8000
+WORKERS: 4
+
+# ========== 数据库配置 ==========
+DATABASE_URL: "postgresql+asyncpg://user:password@localhost:5432/kiki"
+DATABASE_POOL_SIZE: 20
+DATABASE_MAX_OVERFLOW: 10
+
+# ========== LLM 配置（分层） ==========
+# 基础模型（日常使用）
+BASIC_MODEL:
+  model: "gpt-4o"
+  api_key: "$OPENAI_API_KEY"
+  base_url: "$OPENAI_BASE_URL:-https://api.openai.com"
+  temperature: 0.7
+  max_tokens: 4096
+
+# 推理模型（复杂任务规划）
+REASONING_MODEL:
+  model: "deepseek-reasoner"
+  api_key: "$DEEPSEEK_API_KEY"
+  base_url: "https://api.deepseek.com"
+  temperature: 0.6
+  max_tokens: 100000
+
+# 代码模型（代码生成）
+CODE_MODEL:
+  model: "claude-sonnet-4-20250514"
+  api_key: "$ANTHROPIC_API_KEY"
+  base_url: "https://api.anthropic.com"
+  temperature: 0.3
+  max_tokens: 8192
+
+# 视觉模型（多模态）
+VISION_MODEL:
+  model: "gpt-4o"
+  api_key: "$OPENAI_API_KEY"
+  base_url: "$OPENAI_BASE_URL:-https://api.openai.com"
+  temperature: 0.7
+  max_tokens: 4096
+
+# ========== 搜索引擎配置 ==========
+SEARCH_ENGINE:
+  provider: "tavily"  # tavily, duckduckgo
+  api_key: "$TAVILY_API_KEY"
+  max_results: 5
+  search_depth: "basic"  # basic, advanced
+
+  # Tavily 配置
+  tavily:
+    include_domains: []
+    exclude_domains: ["spam.com", "malicious-site.com"]
+    days_limit: 7
+
+# ========== 搜索配置 ==========
+WEB_SEARCH:
+  enabled: true
+  max_results: 5
+  timeout: 30
+  retry_attempts: 3
+
+# ========== 工具配置 ==========
+TOOLS:
+  # Python REPL 工具
+  python_repl:
+    enabled: true
+    timeout: 300
+    max_output_length: 10000
+
+  # 爬虫工具
+  web_crawler:
+    enabled: true
+    max_pages: 10
+    timeout: 30
+
+# ========== Agent 配置映射 ==========
+# Agent 类型 -> LLM 类型映射
+AGENT_LLM_MAPPING:
+  coordinator: "basic"
+  planner: "reasoning"
+  researcher: "basic"
+  analyst: "basic"
+  coder: "code"
+  reporter: "basic"
+  supervisor: "reasoning"
+  router: "basic"
+  chat: "basic"
+  worker: "basic"
+
+# ========== Multi-Agent 配uration ==========
+MULTI_AGENT:
+  # 默认 Supervisor 模式
+  supervisor_mode: "hierarchical"  # hierarchical, sequential
+
+  # 研究团队配置（DeerFlow 风格）
+  research_team:
+    agents: ["planner", "researcher", "analyst", "coder", "reporter"]
+    max_iterations: 5
+
+# ========== Checkpoint 持久化配置 ==========
+CHECKPOINT:
+  # 是否启用 PostgreSQL Checkpoint
+  enable_postgres: true
+
+  # PostgreSQL 连接（如果不使用默认 database_url）
+  postgres_connection: null
+
+# ========== 流式输出配置 ==========
+STREAMING:
+  enabled: true
+  chunk_size: 100
+  timeout: 300
+
+# ========== 可观测性 ==========
+OBSERVABILITY:
+  # 日志级别
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+
+  # Langfuse 配置（可选）
+  langfuse_enabled: false
+  langfuse_public_key: "$LANGFUSE_PUBLIC_KEY"
+  langfuse_secret_key: "$LANGFUSE_SECRET_KEY"
+  langfuse_host: "https://cloud.langfuse.com"
+
+  # Prometheus 指标
+  metrics_enabled: true
+  metrics_port: 9090
+
+# ========== 安全配置 ==========
+SECURITY:
+  # API Key 配置
+  api_key_enabled: true
+  api_key_expiry_days: 365
+
+  # 速率限制
+  rate_limit_enabled: true
+  rate_limit_requests_per_minute: 60
+
+# ========== CORS 配置 ==========
+CORS:
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8000"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "PATCH"
+    - "DELETE"
+  allowed_headers:
+    - "*"
+  allow_credentials: true
+
+# ========== 开发工具配置 ==========
+DEVELOPMENT:
+  # 自动重载
+  auto_reload: true
+
+  # 文档
+  docs_enabled: true
+  docs_url: "/docs"
+
+  # OpenAPI
+  openapi_url: "/openapi.json"

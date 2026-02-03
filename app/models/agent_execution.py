@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-import sqlmodel
 from sqlalchemy import Column as SAColumn
 from sqlalchemy import DateTime
 from sqlalchemy.dialects.postgresql import JSONB

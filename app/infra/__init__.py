@@ -33,10 +33,7 @@ from app.infra.database import (
 )
 from app.infra.redis import close_redis, get_redis, ping
 
-# Search 模块已移除（RAG 相关）
-
 __all__ = [
-    # Cache
     "RedisCache",
     "MultiLayerCache",
     "L1MemoryCache",
@@ -55,14 +52,12 @@ __all__ = [
     "get_tenant_cache",
     "get_cache_stats",
     "warmup_cache",
-    # Database
     "AsyncSession",
     "get_async_engine",
     "get_session",
     "init_db",
     "close_db",
     "health_check",
-    # Redis
     "close_redis",
     "get_redis",
     "ping",

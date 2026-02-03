@@ -1,21 +1,27 @@
-"""CustomAgent 配置 Schema
+"""Agent 配置 Schema（DeerFlow 风格）
 
 完整的 Agent 配置定义，参考 WeKnora99 项目结构。
+
+Schema 说明：
+- AgentConfigSchema: Pydantic Schema，用于 API 请求/响应验证
+- AgentConfig: SQLModel 数据库模型，存储在 agent_configs 表
 """
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 class AgentMode:
     """Agent 模式常量"""
+
     QUICK_ANSWER = "quick-answer"  # RAG 模式
     SMART_REASONING = "smart-reasoning"  # ReAct 模式
 
 
 class KBSelectionMode:
     """知识库选择模式常量"""
+
     ALL = "all"  # 所有知识库
     SELECTED = "selected"  # 指定知识库
     NONE = "none"  # 不使用知识库
@@ -23,6 +29,7 @@ class KBSelectionMode:
 
 class FallbackStrategy:
     """兜底策略常量"""
+
     FIXED = "fixed"  # 固定回复
     MODEL = "model"  # 模型生成
 
@@ -123,17 +130,20 @@ class MultiTurnConfig(BaseModel):
     history_turns: int = Field(default=5, ge=1, le=50, description="历史轮数")
 
 
-class CustomAgentConfig(BaseModel):
-    """完整的 Custom Agent 配置
+class AgentConfigSchema(BaseModel):
+    """完整的 Agent 配置 Schema
 
-    参考 WeKnora99 的 CustomAgentConfig 结构，支持：
+    Pydantic Schema，用于 API 请求/响应验证。
+    参考 WeKnora99 的 AgentConfig 结构，支持：
     - Quick Answer 模式（RAG）
     - Smart Reasoning 模式（ReAct Agent）
 
     默认值遵循 WeKnora99 的最佳实践。
+
+    注意：这是 Pydantic Schema，不是数据库模型。
+    数据库模型使用 app.models.agent_config.AgentConfig
     """
 
-    # ========== 基础设置 ==========
     agent_mode: Literal["quick-answer", "smart-reasoning"] = Field(
         default="quick-answer",
         description="Agent 模式：quick-answer（RAG）或 smart-reasoning（ReAct）"
@@ -147,68 +157,59 @@ class CustomAgentConfig(BaseModel):
         description="上下文模板（用于格式化检索结果）"
     )
 
-    # ========== 模型配置 ==========
     model: ModelConfig = Field(
         default_factory=ModelConfig,
         description="模型配置"
     )
 
-    # ========== Agent 模式配置（smart-reasoning 专用）==========
     tool: ToolConfig | None = Field(
         default=None,
         description="工具配置（仅 smart-reasoning 模式需要）"
     )
 
-    # ========== 知识库配置 ==========
     knowledge_base: KnowledgeBaseConfig = Field(
         default_factory=KnowledgeBaseConfig,
         description="知识库配置"
     )
 
-    # ========== Web 搜索配置 ==========
     web_search: WebSearchConfig = Field(
         default_factory=WebSearchConfig,
         description="Web 搜索配置"
     )
 
-    # ========== 检索策略配置 ==========
     retrieval: RetrievalConfig = Field(
         default_factory=RetrievalConfig,
         description="检索策略配置"
     )
 
-    # ========== 高级配置 ==========
     advanced: AdvancedConfig = Field(
         default_factory=AdvancedConfig,
         description="高级配置"
     )
 
-    # ========== FAQ 策略配置 ==========
     faq: FAQConfig = Field(
         default_factory=FAQConfig,
         description="FAQ 策略配置"
     )
 
-    # ========== 多轮对话配置 ==========
     multi_turn: MultiTurnConfig = Field(
         default_factory=MultiTurnConfig,
         description="多轮对话配置"
     )
 
-    # ========== 文件类型限制（可选） ==========
     supported_file_types: list[str] = Field(
         default_factory=list,
         description="支持的文件类型扩展名（如 ['csv', 'xlsx']），空表示支持所有类型"
     )
 
 
-def get_builtin_quick_answer_config() -> CustomAgentConfig:
+def get_builtin_quick_answer_config() -> AgentConfigSchema:
     """获取内置快速问答（RAG）Agent 的默认配置
 
     Returns:
-        CustomAgentConfig 实例
+        AgentConfigSchema 实例
     """
-    return CustomAgentConfig(
+    return AgentConfigSchema(
         agent_mode="quick-answer",
         system_prompt="",
         context_template="""请根据以下参考资料回答用户问题。
@@ -253,13 +254,13 @@ def get_builtin_quick_answer_config() -> CustomAgentConfig:
     )
 
 
-def get_builtin_smart_reasoning_config() -> CustomAgentConfig:
+def get_builtin_smart_reasoning_config() -> AgentConfigSchema:
     """获取内置智能推理（ReAct）Agent 的默认配置
 
     Returns:
-        CustomAgentConfig 实例
+        AgentConfigSchema 实例
     """
-    return CustomAgentConfig(
+    return AgentConfigSchema(
         agent_mode="smart-reasoning",
         system_prompt="",
         model=ModelConfig(
@@ -306,13 +307,13 @@ def get_builtin_smart_reasoning_config() -> CustomAgentConfig:
     )
 
 
-def get_builtin_data_analyst_config() -> CustomAgentConfig:
+def get_builtin_data_analyst_config() -> AgentConfigSchema:
     """获取内置数据分析 Agent 的默认配置
 
     Returns:
-        CustomAgentConfig 实例
+        AgentConfigSchema 实例
     """
-    return CustomAgentConfig(
+    return AgentConfigSchema(
         agent_mode="smart-reasoning",
         system_prompt="""### Role
 You are WeKnora Data Analyst, an intelligent data analysis assistant powered by DuckDB. You specialize in analyzing structured data from CSV and Excel files using SQL queries.
@@ -391,7 +392,7 @@ __all__ = [
     "AgentMode",
     "KBSelectionMode",
     "FallbackStrategy",
-    # 配置模型
+    # 配置 Schema
     "ModelConfig",
     "ToolConfig",
     "KnowledgeBaseConfig",
@@ -400,8 +401,8 @@ __all__ = [
     "AdvancedConfig",
     "FAQConfig",
     "MultiTurnConfig",
-    " 主配置
-    "CustomAgentConfig",
+    # 主配置
+    "AgentConfigSchema",
     # 工厂函数
     "get_builtin_quick_answer_config",
     "get_builtin_smart_reasoning_config",

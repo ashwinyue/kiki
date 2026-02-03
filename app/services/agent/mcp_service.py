@@ -10,12 +10,9 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.mcp.utils import load_mcp_tools, mcp_tool_to_dict
 from app.infra.database import get_session
-from app.models.agent import (
-    MCPService,
-    MCPServiceCreate,
-    MCPServiceUpdate,
-)
+from app.models import MCPService, MCPServiceCreate, MCPServiceUpdate
 from app.observability.logging import get_logger
 from app.repositories.mcp_service import MCPServiceRepository
 
@@ -271,6 +268,174 @@ class McpServiceService:
             tenant_id=tenant_id,
         )
 
+    async def get_service_tools(
+        self,
+        service_id: int,
+        tenant_id: int,
+        timeout_seconds: int = 60,
+    ) -> dict:
+        """获取 MCP 服务提供的工具列表
+
+        Args:
+            service_id: 服务 ID
+            tenant_id: 租户 ID
+            timeout_seconds: 超时时间（秒）
+
+        Returns:
+            工具列表响应
+
+        Raises:
+            HTTPException: 服务不存在、无权限或连接失败时
+        """
+        service = await self._get_and_verify(service_id, tenant_id)
+
+        if not service.enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="MCP 服务未启用，无法获取工具列表",
+            )
+
+        try:
+            # 根据传输类型准备参数
+            command = None
+            args = None
+            env = None
+            url = None
+            headers = None
+
+            if service.transport_type == "stdio" and service.stdio_config:
+                command = service.stdio_config.get("command")
+                args = service.stdio_config.get("args")
+                env = service.env_vars
+            elif service.transport_type in ("sse", "http") and service.url:
+                url = service.url
+                headers = service.headers
+
+            # 使用 load_mcp_tools 加载工具
+            tools = await load_mcp_tools(
+                server_type=service.transport_type,
+                command=command,
+                args=args,
+                url=url,
+                env=env,
+                headers=headers,
+                timeout_seconds=timeout_seconds,
+            )
+
+            # 转换为字典格式
+            tool_dicts = [mcp_tool_to_dict(t) for t in tools]
+
+            logger.info(
+                "mcp_service_tools_loaded",
+                service_id=service_id,
+                tenant_id=tenant_id,
+                tool_count=len(tool_dicts),
+            )
+
+            return {
+                "service_id": service_id,
+                "service_name": service.name,
+                "tools": tool_dicts,
+                "total": len(tool_dicts),
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception(
+                "mcp_service_tools_load_failed",
+                service_id=service_id,
+                tenant_id=tenant_id,
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"加载 MCP 工具失败: {str(e)}",
+            ) from e
+
+    async def validate_service_config(
+        self,
+        data: MCPServiceCreate,
+        tenant_id: int,
+        timeout_seconds: int = 30,
+    ) -> dict:
+        """验证 MCP 服务配置
+
+        在创建服务前验证配置是否正确，尝试连接并获取工具列表。
+
+        Args:
+            data: 服务配置数据
+            tenant_id: 租户 ID
+            timeout_seconds: 超时时间（秒）
+
+        Returns:
+            验证结果，包含是否成功和工具列表预览
+
+        Raises:
+            HTTPException: 配置无效或连接失败时
+        """
+        try:
+            # 根据传输类型准备参数
+            command = None
+            args = None
+            env = None
+            url = None
+            headers = None
+
+            if data.transport_type == "stdio" and data.stdio_config:
+                command = data.stdio_config.get("command")
+                args = data.stdio_config.get("args")
+                env = data.env_vars
+            elif data.transport_type in ("sse", "http") and data.url:
+                url = data.url
+                headers = data.headers
+
+            # 尝试加载工具
+            tools = await load_mcp_tools(
+                server_type=data.transport_type,
+                command=command,
+                args=args,
+                url=url,
+                env=env,
+                headers=headers,
+                timeout_seconds=timeout_seconds,
+            )
+
+            # 转换为字典格式（预览）
+            tool_preview = [
+                {"name": t.name, "description": t.description}
+                for t in tools[:5]  # 只显示前 5 个工具作为预览
+            ]
+
+            logger.info(
+                "mcp_service_config_validated",
+                tenant_id=tenant_id,
+                transport_type=data.transport_type,
+                tool_count=len(tools),
+            )
+
+            return {
+                "valid": True,
+                "message": "MCP 服务配置验证成功",
+                "tool_preview": tool_preview,
+                "total_tools": len(tools),
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception(
+                "mcp_service_config_validation_failed",
+                tenant_id=tenant_id,
+                error=str(e),
+            )
+            return {
+                "valid": False,
+                "message": f"配置验证失败: {str(e)}",
+                "tool_preview": [],
+                "total_tools": 0,
+            }
+
 
 def get_mcp_service(
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -284,7 +449,3 @@ def get_mcp_service(
         McpServiceService 实例
     """
     return McpServiceService(session)
-
-
-# 向后兼容别名
-get_mcp_service_service = get_mcp_service

@@ -33,24 +33,17 @@ def configure_logging(
     is_production = environment == "production"
     should_json = log_format == "json" or is_production
 
-    # 选择渲染器
     if should_json:
         renderer = structlog.processors.JSONRenderer()
     else:
         renderer = structlog.dev.ConsoleRenderer(colors=True)
 
-    # 配置 structlog
     structlog.configure(
         processors=[
-            # 合并上下文变量
             structlog.contextvars.merge_contextvars,
-            # 添加日志级别
             structlog.stdlib.add_log_level,
-            # 添加 logger 名称
             structlog.stdlib.add_logger_name,
-            # 添加时间戳
             structlog.processors.TimeStamper(fmt="iso"),
-            # 添加调用信息（仅在调试模式）
             structlog.processors.CallsiteParameterAdder(
                 [
                     structlog.processors.CallsiteParameter.FILENAME,
@@ -60,21 +53,14 @@ def configure_logging(
             )
             if not is_production
             else structlog.processors.CallsiteParameterAdder([]),
-            # 异常信息
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            # Unicode 解码
             structlog.processors.UnicodeDecoder(),
-            # 渲染器
             renderer,
         ],
-        # 包装类（添加过滤功能）
         wrapper_class=structlog.make_filtering_bound_logger(log_level),
-        # 上下文类
         context_class=dict,
-        # Logger 工厂（使用标准库 logger）
         logger_factory=structlog.stdlib.LoggerFactory(),
-        # 缓存 logger
         cache_logger_on_first_use=True,
     )
 
