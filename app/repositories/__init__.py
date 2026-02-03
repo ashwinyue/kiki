@@ -10,7 +10,6 @@ from app.repositories.base import (
     PaginatedResult,
     PaginationParams,
 )
-from app.repositories.knowledge import KnowledgeBaseRepository
 from app.repositories.mcp_service import MCPServiceRepository
 from app.repositories.memory import MemoryRepository, StoreAdapter
 from app.repositories.message import MessageRepository
@@ -34,6 +33,5 @@ __all__ = [
     "MemoryRepository",
     "StoreAdapter",
     "AgentRepositoryAsync",
-    "KnowledgeBaseRepository",
     "ModelRepository",
 ]

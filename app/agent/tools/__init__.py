@@ -27,27 +27,11 @@ from app.agent.tools.builtin import (
     close_crawler,
     crawl_multiple_urls,
     crawl_url,
-    data_analysis,
-    data_schema,
-    data_summary,
-    database_describe,
-    database_query,
-    database_tables,
-    get_available_sources,
-    get_document_info,
     get_weather,
-    grep_chunks,
-    is_arxiv_available,
-    is_wikipedia_available,
-    list_knowledge_chunks,
-    query_knowledge_graph,
-    search_academic,
-    search_arxiv,
+    python_repl,
     search_database,
-    search_entity,
     search_web,
     search_web_tavily,
-    search_wikipedia,
     web_fetch,
 )
 from app.agent.tools.decorators import (
@@ -142,37 +126,18 @@ __all__ = [
     # 内置搜索工具
     "search_web",
     "search_web_tavily",
-    "search_wikipedia",
-    "search_arxiv",
-    "search_academic",
     # 内置爬虫工具
     "crawl_url",
     "crawl_multiple_urls",
     "close_crawler",
     # 网页内容提取
     "web_fetch",
-    # 知识库搜索
-    "grep_chunks",
-    "query_knowledge_graph",
-    "search_entity",
-    "list_knowledge_chunks",
-    "get_document_info",
-    # 数据分析工具
-    "data_analysis",
-    "data_schema",
-    "data_summary",
-    # 数据库工具
-    "database_query",
-    "database_tables",
-    "database_describe",
+    # 代码执行
+    "python_repl",
     # 其他内置工具
     "search_database",
     "get_weather",
     "calculate",
-    # 可用性检查
-    "is_wikipedia_available",
-    "is_arxiv_available",
-    "get_available_sources",
     # MCP 工具集成
     "MCPClient",
     "MCPRegistry",
@@ -190,20 +155,9 @@ _builtin_tools = [
     search_database,
     get_weather,
     calculate,
-    # 新增工具
-    grep_chunks,
-    query_knowledge_graph,
+    crawl_url,
     web_fetch,
-    data_analysis,
-    data_schema,
-    data_summary,
-    database_query,
-    database_tables,
-    database_describe,
-    # 知识库管理工具
-    search_entity,
-    list_knowledge_chunks,
-    get_document_info,
+    python_repl,
 ]
 for tool_obj in _builtin_tools:
     register_tool(tool_obj)

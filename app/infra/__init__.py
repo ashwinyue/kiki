@@ -1,6 +1,6 @@
 """通用工具集
 
-提供缓存、存储、搜索、数据库等基础设施工具。
+提供缓存、数据库、搜索等基础设施工具。
 """
 
 from app.infra.cache import (
@@ -24,7 +24,6 @@ from app.infra.database import (
 )
 from app.infra.redis import close_redis, get_redis, ping
 from app.infra.search import SearchEngine, get_search_engine, with_web_search
-from app.infra.storage import Storage, get_storage
 
 __all__ = [
     # Cache
@@ -48,9 +47,6 @@ __all__ = [
     "close_redis",
     "get_redis",
     "ping",
-    # Storage
-    "Storage",
-    "get_storage",
     # Search
     "SearchEngine",
     "get_search_engine",

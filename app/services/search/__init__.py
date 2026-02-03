@@ -1,12 +1,11 @@
 """搜索模块
 
-提供 Elasticsearch 全文搜索和混合检索功能。
+提供基础关键词搜索功能（Elasticsearch 可选）。
 
 模块结构:
-- elasticsearch: Elasticsearch 客户端封装
-- indexer: 文档索引器
-- query: 查询构建器
-- service: 增强搜索服务 (WeKnora99 对齐)
+- elasticsearch: Elasticsearch 客户端封装（可选）
+- indexer: 文档索引器（可选）
+- query: 查询构建器（可选）
 """
 
 from app.services.search.elasticsearch import (
@@ -23,16 +22,6 @@ from app.services.search.query import (
     SearchResult,
     parse_date_histogram_aggregation,
     parse_terms_aggregation,
-)
-from app.services.search.service import (
-    KeywordSearcher,
-    MemoryVectorSearcher,
-    QdrantVectorSearcher,
-    SearchResultPostProcessor,
-    SearchResultType,
-    SearchService,
-    VectorSearcher,
-    hybrid_search,
 )
 
 __all__ = [
@@ -51,13 +40,4 @@ __all__ = [
     "AggregationBucket",
     "parse_terms_aggregation",
     "parse_date_histogram_aggregation",
-    # 增强搜索服务
-    "SearchService",
-    "hybrid_search",
-    "SearchResultType",
-    "SearchResultPostProcessor",
-    "VectorSearcher",
-    "QdrantVectorSearcher",
-    "MemoryVectorSearcher",
-    "KeywordSearcher",
 ]
