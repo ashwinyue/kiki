@@ -464,6 +464,165 @@ return StreamingResponse(
 
 ---
 
+## ✅ 已完成的改进
+
+### 2026-02-03
+
+#### 1️⃣ 创建统一的依赖注入文件 ✅
+
+**文件**: `app/api/v1/dependencies.py`
+
+**实现内容**：
+- 定义类型别名（`DbDep`, `TenantIdDep`, `AgentDep`, `LlmServiceDep` 等）
+- 实现链式依赖注入函数（`get_session_service_dep`, `get_agent_with_memory_dep` 等）
+- 添加服务类依赖（`get_knowledge_service_dep`, `get_model_service_dep` 等）
+- 添加辅助函数（`validate_session_access_dep`, `resolve_effective_user_id_dep`）
+
+**使用示例**：
+```python
+from app.api.v1.dependencies import DbDep, TenantIdDep, AgentDep
+
+@router.get("/items/{id}")
+async def get_item(
+    id: str,
+    db: DbDep,              # 简洁的类型别名
+    tenant_id: TenantIdDep,
+):
+    # ...
+```
+
+#### 2️⃣ 实现连接池单例模式 ✅
+
+**文件**: `app/infra/database.py`
+
+**实现内容**：
+- 添加 `DatabaseConnectionPool` 类（线程安全单例）
+- 使用双重检查锁定确保线程安全
+- 支持懒初始化 + 自动清理
+- 兼容现有代码（保留 `get_async_engine()` 等函数）
+
+**设计模式参考**：
+- 外部项目的 `MultiTenantVectorStore` 单例模式
+- GoF 单例模式 + Python 线程安全
+
+**代码示例**：
+```python
+pool = DatabaseConnectionPool()
+engine = pool.get_async_engine()  # 全局唯一实例
+
+# 应用关闭时
+await pool.close()  # 释放所有连接
+```
+
+#### 3️⃣ 实现 Qdrant 客户端单例 ✅
+
+**文件**: `app/vector_stores/qdrant.py`
+
+**实现内容**：
+- 添加 `QdrantClientSingleton` 类（线程安全单例）
+- 支持多个配置的客户端（通过配置键区分）
+- 修改 `QdrantVectorStore.initialize()` 使用单例客户端
+- 添加客户端关闭管理
+
+**设计模式参考**：
+- 外部项目的 `MultiTenantVectorStore` 单例模式
+
+**代码示例**：
+```python
+client = QdrantClientSingleton()
+qdrant_client = await client.get_client(config)
+
+# 应用关闭时
+await client.close_all()
+```
+
+---
+
+### 4️⃣ MCP 工具 AsyncExitStack 管理 ✅
+
+**文件**: `app/agent/tools/mcp.py`
+
+**实现内容**：
+- 使用 `AsyncExitStack` 管理 MCP 会话生命周期
+- 自动清理 stdio/http/sse 连接资源
+- 改进错误处理和资源释放
+
+**设计模式参考**：
+- 外部项目的 `MCPClientWrapper` 实现
+
+**代码示例**：
+```python
+class MCPClient:
+    def __init__(self):
+        self._exit_stack: AsyncExitStack | None = None
+
+    async def initialize(self):
+        self._exit_stack = AsyncExitStack()
+        # 使用 exit_stack 管理会话
+        session = await self._exit_stack.enter_async_context(stdio_client_ctx)
+
+    async def close(self):
+        await self._exit_stack.aclose()  # 自动清理所有资源
+```
+
+---
+
+### 5️⃣ Supervisor-Agent 多 Agent 编排 ✅
+
+**文件**: `app/agent/graph/supervisor.py`
+
+**实现内容**：
+- 创建 `SupervisorState` 状态类型
+- 实现 `supervisor_node` 路由决策节点
+- 添加专门 Agent（Researcher、Scrapper、Database）
+- 实现 `build_supervisor_graph` 图构建函数
+
+**设计模式参考**：
+- 外部项目的 `supervisor_agent` 实现
+
+**代码示例**：
+```python
+from app.agent.graph.supervisor import invoke_supervisor
+
+result = await invoke_supervisor(
+    message="帮我搜索最新的 AI 技术趋势",
+    session_id="session-123"
+)
+
+# Supervisor 自动路由到 Researcher Agent
+# 结果包含 agent_results、agent_history 等
+```
+
+---
+
+### 6️⃣ 实体提取增强长期记忆 ✅
+
+**文件**: `app/agent/memory/entity_extractor.py`
+
+**实现内容**：
+- 创建 `EntityExtractor` 实体提取器
+- 定义 `EntityType` 枚举（人物、组织、地点等）
+- 实现 `EntityStore` 实体存储管理
+- 支持从消息列表提取实体
+
+**设计模式参考**：
+- 外部项目的 Mem0 实体提取
+
+**代码示例**：
+```python
+from app.agent.memory.entity_extractor import get_entity_extractor
+
+extractor = get_entity_extractor()
+response = await extractor.extract(
+    text="我喜欢用 Python 和 FastAPI 开发 Web 应用",
+    user_id="user-123",
+)
+
+# 返回实体：Python (skill), FastAPI (product), Web (concept)
+```
+
+---
+
 ## 🎓 总结
 
 ### 外部项目的优势

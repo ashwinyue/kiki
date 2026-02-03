@@ -1,9 +1,13 @@
 """MCP (Model Context Protocol) 工具集成
 
 支持从 MCP 服务器动态加载工具。
+
+采用 AsyncExitStack 管理资源生命周期，确保连接正确关闭。
+参考外部项目的 MCPClientWrapper 设计模式。
 """
 
 import json
+from contextlib import AsyncExitStack
 from typing import Any
 
 from langchain_core.tools import StructuredTool
@@ -20,6 +24,8 @@ class MCPClient:
     """MCP 客户端
 
     通过 stdio 或 HTTP 与 MCP 服务器通信，获取工具列表。
+
+    使用 AsyncExitStack 自动管理资源生命周期，确保连接正确关闭。
     """
 
     def __init__(
@@ -47,17 +53,23 @@ class MCPClient:
         self.transport = transport
         self.url = url
         self._tools: dict[str, StructuredTool] = {}
-        self._process: Any = None
+        self._exit_stack: AsyncExitStack | None = None
+        self._session: Any = None
         self._initialized = False
 
     async def initialize(self) -> bool:
         """初始化 MCP 连接
+
+        使用 AsyncExitStack 自动管理资源生命周期。
 
         Returns:
             是否成功
         """
         if self._initialized:
             return True
+
+        # 创建 AsyncExitStack
+        self._exit_stack = AsyncExitStack()
 
         try:
             if self.transport == "stdio":
@@ -81,10 +93,14 @@ class MCPClient:
 
         except Exception as e:
             logger.error("mcp_init_failed", name=self.name, error=str(e))
+            # 清理已创建的资源
+            await self.close()
             return False
 
     async def _initialize_stdio(self) -> bool:
         """初始化 stdio 传输
+
+        使用 AsyncExitStack 管理会话生命周期。
 
         Returns:
             是否成功
@@ -98,9 +114,10 @@ class MCPClient:
                 args=self.args,
             )
 
-            self._session = stdio_client(server_params)
-
-            await self._session.__aenter__()
+            # 使用 AsyncExitStack 管理 stdio_client
+            stdio_client_ctx = stdio_client(server_params)
+            session = await self._exit_stack.enter_async_context(stdio_client_ctx)
+            self._session = session
 
             # 列出可用工具
             response = await self._session.list_tools()
@@ -122,6 +139,8 @@ class MCPClient:
     async def _initialize_http(self) -> bool:
         """初始化 HTTP/SSE 传输
 
+        使用 AsyncExitStack 管理会话生命周期。
+
         Returns:
             是否成功
         """
@@ -133,8 +152,10 @@ class MCPClient:
                 logger.error("mcp_http_url_not_set")
                 return False
 
-            self._session = http_client(self.url)
-            await self._session.__aenter__()
+            # 使用 AsyncExitStack 管理 http_client
+            http_client_ctx = http_client(self.url)
+            session = await self._exit_stack.enter_async_context(http_client_ctx)
+            self._session = session
 
             # 列出可用工具
             response = await self._session.list_tools()
@@ -232,11 +253,20 @@ class MCPClient:
         return list(self._tools.values())
 
     async def close(self) -> None:
-        """关闭 MCP 连接"""
-        if self._session:
-            await self._session.__aexit__(None, None, None)
-            self._initialized = False
-            logger.info("mcp_client_closed", name=self.name)
+        """关闭 MCP 连接
+
+        使用 AsyncExitStack 自动清理所有资源。
+        """
+        if self._exit_stack:
+            try:
+                await self._exit_stack.aclose()
+                logger.info("mcp_client_closed", name=self.name)
+            except Exception as e:
+                logger.warning("mcp_client_close_error", name=self.name, error=str(e))
+            finally:
+                self._exit_stack = None
+                self._session = None
+                self._initialized = False
 
 
 # ============== MCP 服务器注册表 ==============
