@@ -12,11 +12,12 @@ from starlette.requests import Request as StarletteRequest
 
 from app.infra.database import get_session
 from app.middleware import RequiredTenantIdDep
-from app.models import MCPServiceCreate, MCPServiceRequest, MCPServiceUpdate
+from app.models.mcp_service import MCPServiceCreate, MCPServiceUpdate
 from app.observability.logging import get_logger
 from app.rate_limit.limiter import RateLimit, limiter
 from app.schemas.mcp_service import (
     MCPServiceListResponse,
+    MCPServiceRequest,
     MCPServiceResponse,
 )
 from app.services.mcp_service import McpServiceService, get_mcp_service
