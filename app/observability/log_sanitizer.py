@@ -53,11 +53,8 @@ def sanitize_log_input(value: Any, max_length: int = 500) -> str:
     if value is None:
         return "None"
 
-    # 转换为字符串
     string_value = str(value)
 
-    # 替换危险字符为转义表示
-    # 顺序很重要：先转义反斜杠以避免双重转义
     replacements = {
         "\\": "\\\\",  # 反斜杠（必须先处理）
         "\n": "\\n",  # 换行符 - 防止创建新日志条目
@@ -70,11 +67,8 @@ def sanitize_log_input(value: Any, max_length: int = 500) -> str:
     for char, replacement in replacements.items():
         string_value = string_value.replace(char, replacement)
 
-    # 移除其他控制字符（ASCII 0-31 中已处理的除外）
-    # 这些字符在日志中很少有用，且可能被利用
     string_value = re.sub(r"[\x00-\x08\x0b-\x0c\x0e-\x1f]", "", string_value)
 
-    # 截断防止日志洪水攻击
     if len(string_value) > max_length:
         string_value = string_value[: max_length - 3] + "..."
 
@@ -166,7 +160,6 @@ def sanitize_error_message(error: Any) -> str:
     if error is None:
         return "None"
 
-    # 如果是异常对象，获取其字符串表示
     if isinstance(error, Exception):
         error_str = f"{type(error).__name__}: {str(error)}"
     else:
@@ -197,12 +190,10 @@ def create_safe_log_message(template: str, **kwargs) -> str:
         >>> "[abc\\\\n[INFO]] Processing my_tool" in msg
         True
     """
-    # 清洗所有值
     safe_kwargs = {
         key: sanitize_log_input(value) for key, value in kwargs.items()
     }
 
-    # 替换到模板中
     return template.format(**safe_kwargs)
 
 

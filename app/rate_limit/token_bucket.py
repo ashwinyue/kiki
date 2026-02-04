@@ -298,28 +298,16 @@ class TokenBucketRateLimiter(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable,
     ) -> Response:
-        """处理请求
-
-        Args:
-            request: FastAPI 请求对象
-            call_next: 下一个中间件或路由处理器
-
-        Returns:
-            Response: HTTP 响应
-        """
-        # 检查豁免路径
+        """处理请求并应用限流策略。"""
         if request.url.path in self.exempt_paths:
             return await call_next(request)
 
-        # 获取限流键
         key = self.key_func(request)
         bind_context(rate_limit_key=key)
 
-        # 定期清理过期桶
         if len(self._buckets) > 1000:
             asyncio.create_task(self._cleanup_expired_buckets())
 
-        # 获取令牌桶并消费令牌
         bucket = await self._get_bucket(key)
         allowed, remaining, retry_after = await bucket.consume(
             self.tokens_per_request
@@ -336,7 +324,6 @@ class TokenBucketRateLimiter(BaseHTTPMiddleware):
 
             return self._create_rate_limit_response(retry_after, remaining)
 
-        # 请求正常，添加响应头
         response = await call_next(request)
 
         response.headers["X-RateLimit-Policy"] = self._policy_name
@@ -387,10 +374,9 @@ class PathBasedRateLimiter(TokenBucketRateLimiter):
         request: Request,
         call_next: Callable,
     ) -> Response:
-        """根据路径选择限流策略"""
+        """根据路径选择限流策略。"""
         path = request.url.path
 
-        # 查找匹配的策略
         policy = None
         for pattern, pol in self.policies.items():
             if path.startswith(pattern):
@@ -398,7 +384,6 @@ class PathBasedRateLimiter(TokenBucketRateLimiter):
                 break
 
         if policy:
-            # 临时替换限流参数
             original_rate = self.rate
             original_capacity = self.capacity
             original_tokens = self.tokens_per_request
@@ -410,7 +395,6 @@ class PathBasedRateLimiter(TokenBucketRateLimiter):
             try:
                 return await super().dispatch(request, call_next)
             finally:
-                # 恢复原始值
                 self.rate = original_rate
                 self.capacity = original_capacity
                 self.tokens_per_request = original_tokens
@@ -418,7 +402,6 @@ class PathBasedRateLimiter(TokenBucketRateLimiter):
         return await super().dispatch(request, call_next)
 
 
-# ============== 便捷函数 ==============
 
 def check_rate_limit(
     key: str,
@@ -426,9 +409,7 @@ def check_rate_limit(
     capacity: int,
     tokens: float = 1.0,
 ) -> tuple[bool, float]:
-    """检查限流（无状态方式）
-
-    用于在非中间件场景下检查限流。
+    """检查限流（无状态方式，用于非中间件场景）。
 
     Args:
         key: 限流键
@@ -439,8 +420,6 @@ def check_rate_limit(
     Returns:
         tuple: (allowed, retry_after)
     """
-    # 简化实现：使用 Redis 存储桶状态
-    # 这里只是一个示例，实际应用中需要持久化存储
     bucket = TokenBucket(rate=rate, capacity=capacity)
     allowed, remaining, retry_after = asyncio.run(bucket.consume(tokens))
     return allowed, retry_after
@@ -452,7 +431,7 @@ async def async_check_rate_limit(
     capacity: int,
     tokens: float = 1.0,
 ) -> tuple[bool, float]:
-    """异步检查限流
+    """异步检查限流。
 
     Args:
         key: 限流键

@@ -31,7 +31,6 @@ def _create_cache_key(system_prompt: str | None) -> str:
     """
     if system_prompt is None:
         return "__default__"
-    # 使用哈希值避免过长的键，添加版本号避免冲突
     return f"v1_{hash(system_prompt)}"
 
 
@@ -99,14 +98,11 @@ class GraphCache:
                 logger.debug("graph_cache_hit", key=cache_key)
                 return self._cache[cache_key]
 
-            # 缓存未命中，创建新图
             logger.debug("graph_cache_miss", key=cache_key, creating_new=True)
 
-            # 检查缓存大小，必要时淘汰
             if len(self._cache) >= self._max_size:
                 self._evict_lru()
 
-            # 创建并缓存图
             graph = self._graph_factory(system_prompt)
 
             self._cache[cache_key] = graph

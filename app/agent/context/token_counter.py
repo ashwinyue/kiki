@@ -1,17 +1,6 @@
 """Token 计算模块
 
 提供 Token 计算功能，支持启发式估算和精确计算（使用 tiktoken）。
-
-使用示例:
-```python
-from app.agent.context.token_counter import count_tokens, count_messages_tokens
-
-# 计算文本 Token 数
-token_count = count_tokens("Hello, world!", model="gpt-4o")
-
-# 计算消息列表 Token 数
-total = count_messages_tokens(messages, model="gpt-4o")
-```
 """
 
 import re
@@ -23,15 +12,9 @@ from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
-# ============== Token 估算常量 ==============
-
-# Token 估算常量
-# 参考: OpenAI 的 tokenization 规则
-_CHARS_PER_TOKEN = 4  # 英文平均每个 token 约 4 个字符
-_CHINESE_CHARS_PER_TOKEN = 1.5  # 中文平均每个 token 约 1.5 个字符
-
-
-# ============== 启发式 Token 计算 ==============
+# Token 估算常量（参考: OpenAI 的 tokenization 规则）
+_CHARS_PER_TOKEN = 4
+_CHINESE_CHARS_PER_TOKEN = 1.5
 
 
 def count_tokens(text: str, model: str = "gpt-4o") -> int:

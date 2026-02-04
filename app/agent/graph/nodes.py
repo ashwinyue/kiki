@@ -63,7 +63,6 @@ async def chat_node(
 
     try:
         from app.agent.state import ChatState as ChatStateClass
-        from app.agent.state import ChatState as ChatStateClass
 
         state_obj = ChatStateClass(**state)
         messages = state_obj.trim_messages()
@@ -76,14 +75,12 @@ async def chat_node(
             )
     except Exception as e:
         logger.warning("message_trimming_failed", error=str(e))
-        # 如果截断失败，继续使用原始消息列表
 
     if not messages or not isinstance(messages[0], SystemMessage):
         messages_with_system = [SystemMessage(content=system_prompt)] + messages
     else:
         messages_with_system = messages
 
-    # 构建提示词模板（不包含 system，因为已经在消息中）
     prompt_template = ChatPromptTemplate.from_messages(
         [MessagesPlaceholder(variable_name="messages")]
     )
@@ -91,7 +88,6 @@ async def chat_node(
     chain = prompt_template | llm
 
     try:
-        # 调用 LLM
         response = await chain.ainvoke(
             {"messages": messages_with_system},
             config,
@@ -105,7 +101,6 @@ async def chat_node(
             iteration_count=iteration_count + 1,
         )
 
-        # 返回状态更新
         return {
             "messages": [response],
             "iteration_count": iteration_count + 1,

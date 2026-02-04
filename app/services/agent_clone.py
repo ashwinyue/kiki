@@ -15,7 +15,6 @@ from app.schemas.agent import (
     AgentCopyResponse,
     BatchAgentCopyRequest,
     BatchAgentCopyResponse,
-    BatchAgentCopyResult,
 )
 
 logger = get_logger(__name__)

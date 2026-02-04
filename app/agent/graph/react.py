@@ -78,10 +78,8 @@ def create_react_agent(
         tools_count=len(tools),
     )
 
-    # 获取 LLM
     llm = get_llm_by_type(agent_type)
 
-    # 构建 prompt 函数
     if prompt_template:
         # 使用 Jinja2 模板
         def prompt_fn(state: dict) -> str:
@@ -94,11 +92,9 @@ def create_react_agent(
                 **state,
             )
     else:
-        # 使用默认提示词
         def prompt_fn(state: dict) -> str:
             return f"你是 {agent_name}。"
 
-    # 创建 ReAct Agent
     agent = langgraph_create_react_agent(
         name=agent_name,
         model=llm,

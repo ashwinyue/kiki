@@ -1,18 +1,6 @@
 """日志配置
 
 使用 structlog 实现结构化日志。
-
-使用示例:
-```python
-from app.observability.logging import get_logger, bind_context
-
-log = get_logger(__name__)
-log.info("event_occurred", user_id="123", action="login")
-
-# 绑定上下文
-bind_context(request_id="abc-123")
-log.info("request_processed")  # 自动包含 request_id
-```
 """
 
 import structlog
@@ -23,13 +11,7 @@ def configure_logging(
     log_level: str = "INFO",
     log_format: str = "console",
 ) -> None:
-    """配置 structlog
-
-    Args:
-        environment: 环境 (development/staging/production)
-        log_level: 日志级别
-        log_format: 日志格式 (console/json)
-    """
+    """配置 structlog"""
     is_production = environment == "production"
     should_json = log_format == "json" or is_production
 

@@ -82,6 +82,7 @@ def _create_plan(research_topic: str) -> dict:
 
     TODO: 实际应该从 planner 的输出中解析结构化计划
     """
+    return {
         "goal": research_topic,
         "steps": [
             {"step_type": "research", "description": "搜索相关信息", "execution_res": None},

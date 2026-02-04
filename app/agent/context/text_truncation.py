@@ -1,17 +1,6 @@
 """文本截断模块
 
 提供消息列表和文本的智能截断功能。
-
-使用示例:
-```python
-from app.agent.context.text_truncation import truncate_messages, truncate_text
-
-# 截断消息列表
-truncated = truncate_messages(messages, max_tokens=4000)
-
-# 截断文本
-short_text = truncate_text(long_text, max_tokens=1000)
-```
 """
 
 from langchain_core.messages import BaseMessage, SystemMessage

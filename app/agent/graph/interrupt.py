@@ -49,8 +49,6 @@ from app.observability.logging import get_logger
 logger = get_logger(__name__)
 
 
-# ============== 审核数据模型 ==============
-
 
 class HumanApproval(BaseModel):
     """人工审核结果
@@ -75,9 +73,6 @@ class InterruptRequest(BaseModel):
     requires_approval: bool = Field(default=True, description="是否需要批准")
 
 
-# ============== 节点函数 ==============
-
-
 async def interrupt_chat_node(
     state: AgentState,
     config: RunnableConfig,
@@ -93,7 +88,6 @@ async def interrupt_chat_node(
     """
     logger.debug("interrupt_chat_node_entered")
 
-    # 从 config 中获取 llm_service 和 system_prompt
     metadata = config.get("metadata", {})
     llm_service = metadata.get("llm_service")
     system_prompt = metadata.get("system_prompt")
@@ -101,18 +95,15 @@ async def interrupt_chat_node(
     if not llm_service:
         raise RuntimeError("LLM service not found in config metadata")
 
-    # 获取带工具绑定的 LLM
     llm = llm_service.get_llm_with_tools([])
     if not llm:
         raise RuntimeError("Failed to get LLM from LLMService")
 
-    # 构建提示词模板
     prompt_template = ChatPromptTemplate.from_messages([
         ("system", "{system_prompt}"),
         MessagesPlaceholder(variable_name="messages"),
     ])
 
-    # 构建 LCEL 链
     chain = prompt_template | llm
 
     try:
@@ -129,7 +120,6 @@ async def interrupt_chat_node(
             has_tool_calls=bool(hasattr(response, "tool_calls") and response.tool_calls),
         )
 
-        # 检查是否有之前的拒绝反馈
         updates: dict[str, Any] = {"messages": [response]}
 
         if "_approval" in state and not state["_approval"].get("approved", True):
@@ -167,16 +157,13 @@ async def check_interrupt_node(
     """
     logger.debug("check_interrupt_node_entered")
 
-    # 获取最后一条消息
     last_message = state["messages"][-1]
 
-    # 检查是否有工具调用
     needs_review = False
     review_reason = ""
     proposed_action = ""
 
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        # 检查是否有需要审核的工具
         sensitive_tools = {"delete", "send", "email", "message", "modify", "update"}
         for tool_call in last_message.tool_calls:
             tool_name = tool_call.get("name", "").lower()
@@ -188,7 +175,6 @@ async def check_interrupt_node(
                 )
                 break
 
-    # 检查是否有特殊标记（显式触发中断）
     if hasattr(last_message, "content") and isinstance(last_message.content, str):
         if "<REVIEW>" in last_message.content or "<审核>" in last_message.content:
             needs_review = True
@@ -196,24 +182,20 @@ async def check_interrupt_node(
             proposed_action = last_message.content
 
     if not needs_review:
-        # 不需要审核，直接执行
         return Command(goto="execute")
 
-    # 使用 interrupt 机制等待人工输入
     logger.info(
         "interrupt_triggered",
         reason=review_reason,
         proposed_action=proposed_action[:200] if proposed_action else "",
     )
 
-    # 创建中断请求
     interrupt_request = InterruptRequest(
         reason=review_reason,
         proposed_action=proposed_action,
         requires_approval=True,
     )
 
-    # 触发中断 - 这里会暂停执行，等待 aresume
     approval = interrupt(
         {
             "type": "human_review",
@@ -222,21 +204,18 @@ async def check_interrupt_node(
         }
     )
 
-    # 人工恢复后，approval 会包含审核结果
     logger.info(
         "interrupt_resumed",
         approved=approval.get("approved", False),
         feedback=approval.get("feedback", ""),
     )
 
-    # 将审核结果存入状态，供后续节点使用
     if approval.get("approved", False):
         return Command(
             update={"_approval": approval},
             goto="execute",
         )
     else:
-        # 被拒绝，返回聊天节点让 Agent 重新思考
         return Command(
             update={"_approval": approval},
             goto="chat",
@@ -258,7 +237,6 @@ async def execute_node(
     """
     logger.debug("execute_node_entered")
 
-    # 检查是否有审核拒绝
     if "_approval" in state and not state["_approval"].get("approved", True):
         feedback = state["_approval"].get("feedback", "未提供原因")
         return Command(
@@ -269,19 +247,14 @@ async def execute_node(
             goto="__end__",
         )
 
-    # 获取最后一条消息
     last_message = state["messages"][-1]
 
-    # 如果有工具调用，执行工具
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
         tool_node = get_tool_node()
         result = await tool_node.ainvoke(state, config)
         return Command(update=result, goto="chat")
 
     return Command(goto="__end__")
-
-
-# ============== 图构建函数 ==============
 
 
 def build_interrupt_graph() -> StateGraph:
@@ -292,15 +265,12 @@ def build_interrupt_graph() -> StateGraph:
     """
     builder = StateGraph(AgentState)
 
-    # 添加节点
     builder.add_node("chat", interrupt_chat_node)
     builder.add_node("check_interrupt", check_interrupt_node)
     builder.add_node("execute", execute_node)
 
-    # 设置入口点
     builder.add_edge(START, "chat")
 
-    # chat -> check_interrupt (每次生成响应后检查是否需要审核)
     builder.add_edge("chat", "check_interrupt")
 
     # check_interrupt 会动态路由到 execute 或 __end__
@@ -313,7 +283,6 @@ def build_interrupt_graph() -> StateGraph:
         },
     )
 
-    # execute -> chat (如果还有工具调用)
     builder.add_conditional_edges(
         "execute",
         lambda state: "chat" if hasattr(state["messages"][-1], "tool_calls") and state["messages"][-1].tool_calls else "__end__",
@@ -349,9 +318,6 @@ def compile_interrupt_graph(
     logger.info("interrupt_graph_compiled")
 
     return graph
-
-
-# ============== InterruptGraph 类（向后兼容）=============
 
 
 class InterruptGraph:
@@ -412,7 +378,6 @@ class InterruptGraph:
         self,
         checkpointer: BaseCheckpointSaver | None = None,
     ) -> CompiledStateGraph:
-        """编译图"""
         if self._graph is None:
             self._checkpointer = checkpointer or self._checkpointer
             self._graph = compile_interrupt_graph(self._checkpointer)
@@ -427,7 +392,6 @@ class InterruptGraph:
         if self._graph is None:
             self.compile()
 
-        # 确保 metadata 中有 llm_service 和 system_prompt
         if isinstance(config, dict):
             metadata = config.get("metadata", {})
             if "llm_service" not in metadata:
@@ -466,13 +430,11 @@ class InterruptGraph:
             approved=approval_data.get("approved"),
         )
 
-        # 审核结果通过 update_state 传入
         await self._graph.update_state(
             config,
             {"_approval": approval_data},
         )
 
-        # 继续执行
         return await self._graph.ainvoke(None, config)
 
     async def get_pending_review(
@@ -492,7 +454,6 @@ class InterruptGraph:
 
         state = await self._graph.aget_state(config)
 
-        # 检查是否有待处理的中断
         if state and state.next:
             current_state = state.values if hasattr(state, "values") else {}
             interrupt_request = current_state.get("_interrupt_request")
@@ -501,8 +462,6 @@ class InterruptGraph:
 
         return None
 
-
-# ============== 便捷函数 ==============
 
 
 def create_interrupt_graph(

@@ -1,8 +1,7 @@
 """聊天 API 路由
 
 提供聊天接口，支持同步和流式响应（SSE）。
-遵循 LangGraph streaming 最佳实践。
-使用 FastAPI 标准依赖注入模式。
+使用 DeerFlow 风格的 Agent 系统（CompiledStateGraph）。
 """
 
 from __future__ import annotations
@@ -11,12 +10,14 @@ from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from langgraph.types import RunnableConfig
 from starlette.requests import Request as StarletteRequest
 
+from app.agent.graph import create_agent
+from app.agent.graph.chat_stream import get_chat_stream_manager
 from app.agent.message_utils import extract_ai_content
 from app.agent.state import create_state_from_input
 from app.api.v1.dependencies import (
-    AgentDep,
     TenantIdDep,
     UserIdDep,
 )
@@ -29,7 +30,6 @@ from app.schemas.chat import (
     Message,
     SSEEvent,
     StreamChatRequest,
-    WebsearchConfig,
 )
 from app.services.core.session_service import resolve_effective_user_id
 
@@ -66,7 +66,7 @@ async def _validate_session_access_dep(
 
 
 def _prepare_websearch_config(
-    websearch: WebsearchConfig | None,
+    websearch,
 ) -> dict[str, str | int] | None:
     """准备 Web 搜索配置
 
@@ -90,21 +90,19 @@ def _prepare_websearch_config(
 async def chat(
     request: ChatRequest,
     http_request: StarletteRequest,
-    agent: AgentDep,
     tenant_id: TenantIdDep = None,
     user_id: UserIdDep = None,
 ) -> ChatResponse:
     """聊天接口（非流式）
 
-    使用标准 FastAPI 依赖注入模式：
-    - agent: 通过依赖注入获取 LangGraphAgent 实例
-    - tenant_id: 通过依赖注入获取租户 ID
-    - user_id: 通过依赖注入获取用户 ID
+    使用 DeerFlow 风格 Agent 系统：
+    - 动态创建 Agent（CompiledStateGraph）
+    - 支持 stream_mode="messages" 流式输出
+    - Checkpoint 持久化
 
     Args:
         request: 聊天请求
         http_request: FastAPI 请求对象（用于限流）
-        agent: Agent 实例（依赖注入）
         tenant_id: 租户 ID（依赖注入）
         user_id: 用户 ID（依赖注入）
 
@@ -120,23 +118,30 @@ async def chat(
             tenant_id=tenant_id,
         )
 
-        websearch_config = _prepare_websearch_config(request.websearch)
-        if websearch_config:
-            logger.info(
-                "websearch_enabled",
-                provider=websearch_config["provider"],
-                search_depth=websearch_config["search_depth"],
-            )
-
-        messages = await agent.get_response(
-            message=request.message,
-            session_id=request.session_id,
-            user_id=effective_user_id,
-            tenant_id=tenant_id,
-            websearch_config=websearch_config,
+        # 创建 Agent（DeerFlow 风格）
+        agent = create_agent(
+            agent_name="chat",
+            agent_type="chat",
+            prompt_template="chat_with_tools",
         )
 
-        content = extract_ai_content(messages)
+        # 准备输入
+        input_data = create_state_from_input(
+            input_text=request.message,
+            user_id=effective_user_id,
+            session_id=request.session_id,
+        )
+
+        # 准备配置
+        config = RunnableConfig(
+            configurable={"thread_id": request.session_id},
+        )
+
+        # 执行 Agent
+        result = await agent.ainvoke(input_data, config)
+
+        # 提取响应内容
+        content = extract_ai_content(result.get("messages", []))
 
         return ChatResponse(content=content, session_id=request.session_id)
 
@@ -150,25 +155,20 @@ async def chat(
 async def chat_stream(
     request: StreamChatRequest,
     http_request: StarletteRequest,
-    agent: AgentDep,
     tenant_id: TenantIdDep = None,
     user_id: UserIdDep = None,
 ) -> StreamingResponse:
     """流式聊天接口（SSE）
 
-    使用标准 FastAPI 依赖注入模式：
-    - agent: 通过依赖注入获取 LangGraphAgent 实例
-
-    遵循 LangGraph streaming 最佳实践：
-    - 使用 Agent 层统一处理（包含 checkpointer、中间件、追踪）
-    - 支持 stream_mode="messages" 获取令牌级流式输出
-    - 返回 (message_chunk, metadata) 元组
-    - 支持多种流式模式
+    使用 DeerFlow 风格 Agent 系统：
+    - 动态创建 Agent（CompiledStateGraph）
+    - 使用 LangGraph streaming API
+    - 支持 stream_mode="messages" 令牌级输出
+    - Checkpoint 持久化 + ChatStreamManager
 
     Args:
         request: 聊天请求
         http_request: FastAPI 请求对象（用于限流）
-        agent: Agent 实例（依赖注入）
         tenant_id: 租户 ID（依赖注入）
         user_id: 用户 ID（依赖注入）
 
@@ -185,20 +185,15 @@ async def chat_stream(
         tenant_id=tenant_id,
     )
 
-    # 准备 websearch 配置
-    websearch_config = _prepare_websearch_config(request.websearch)
-    if websearch_config:
-        logger.info(
-            "websearch_enabled",
-            provider=websearch_config["provider"],
-            search_depth=websearch_config["search_depth"],
-        )
-
     async def event_generator() -> AsyncIterator[str]:
         """生成 SSE 事件流"""
         try:
-            # 使用依赖注入的 agent
-            graph = await agent.get_compiled_graph()
+            # 创建 Agent（DeerFlow 风格）
+            agent = create_agent(
+                agent_name="chat",
+                agent_type="chat",
+                prompt_template="chat_with_tools",
+            )
 
             # 准备输入
             input_data = create_state_from_input(
@@ -207,16 +202,7 @@ async def chat_stream(
                 session_id=request.session_id,
             )
 
-            # 添加 websearch 配置到输入数据
-            if websearch_config:
-                if hasattr(input_data, "websearch_config"):
-                    input_data.websearch_config = websearch_config
-                else:
-                    input_data["websearch_config"] = websearch_config
-
             # 准备配置
-            from langgraph.types import RunnableConfig
-
             callbacks = []
             try:
                 from app.agent.callbacks import KikiCallbackHandler
@@ -234,18 +220,8 @@ async def chat_stream(
             except Exception:
                 pass
 
-            # 构建 metadata（包含 websearch 配置）
-            metadata = {
-                "user_id": effective_user_id,
-                "session_id": request.session_id,
-                "tenant_id": tenant_id,
-            }
-            if websearch_config:
-                metadata["websearch"] = websearch_config
-
             config = RunnableConfig(
                 configurable={"thread_id": request.session_id},
-                metadata=metadata,
                 callbacks=callbacks or None,
             )
 
@@ -259,7 +235,7 @@ async def chat_stream(
             if request.stream_mode == "messages":
                 # 令牌级流式输出 (最佳实践)
                 token_buffer: list[str] = []
-                async for chunk, metadata in graph.astream(
+                async for chunk, metadata in agent.astream(
                     input_data,
                     config,
                     stream_mode="messages",
@@ -279,17 +255,17 @@ async def chat_stream(
                         )
                         yield event.format()
 
-                # 写入上下文存储（不影响主流程）
-                if token_buffer:
-                    await agent.persist_interaction(
-                        request.session_id,
-                        request.message,
-                        "".join(token_buffer),
-                    )
+                # 持久化到 ChatStreamManager
+                stream_manager = await get_chat_stream_manager()
+                await stream_manager.process_stream_message(
+                    thread_id=request.session_id,
+                    message="".join(token_buffer),
+                    finish_reason="stop",
+                )
 
             elif request.stream_mode == "updates":
                 # 状态更新流式输出
-                async for chunk in graph.astream(
+                async for chunk in agent.astream(
                     input_data,
                     config,
                     stream_mode="updates",
@@ -305,7 +281,7 @@ async def chat_stream(
 
             elif request.stream_mode == "values":
                 # 完整状态流式输出
-                async for chunk in graph.astream(
+                async for chunk in agent.astream(
                     input_data,
                     config,
                     stream_mode="values",
@@ -361,18 +337,16 @@ async def chat_stream(
 @limiter.limit(RateLimit.API)
 async def get_chat_history(
     session_id: str,
-    agent: AgentDep,
+    http_request: StarletteRequest,
     tenant_id: TenantIdDep = None,
     user_id: UserIdDep = None,
 ) -> ChatHistoryResponse:
     """获取聊天历史
 
-    使用标准 FastAPI 依赖注入模式：
-    - agent: 通过依赖注入获取 LangGraphAgent 实例
+    使用 ChatStreamManager 获取持久化的聊天历史。
 
     Args:
         session_id: 会话 ID
-        agent: Agent 实例（依赖注入）
         tenant_id: 租户 ID（依赖注入）
         user_id: 用户 ID（依赖注入）
 
@@ -386,19 +360,21 @@ async def get_chat_history(
             tenant_id=tenant_id,
         )
 
-        messages = await agent.get_chat_history(session_id)
+        stream_manager = await get_chat_stream_manager()
+        messages = await stream_manager.get_chat_history(session_id)
+
+        if not messages:
+            return ChatHistoryResponse(messages=[], session_id=session_id)
 
         # 转换为响应格式
         history_messages = []
         for msg in messages:
-            if msg.type in ("human", "ai", "system"):
-                role_map = {"human": "user", "ai": "assistant", "system": "system"}
-                history_messages.append(
-                    Message(
-                        role=role_map.get(msg.type, msg.type),
-                        content=str(msg.content),
-                    )
+            history_messages.append(
+                Message(
+                    role="assistant",
+                    content=msg,
                 )
+            )
 
         return ChatHistoryResponse(messages=history_messages, session_id=session_id)
 
@@ -411,18 +387,15 @@ async def get_chat_history(
 @limiter.limit(RateLimit.API)
 async def clear_chat_history(
     session_id: str,
-    agent: AgentDep,
     tenant_id: TenantIdDep = None,
     user_id: UserIdDep = None,
 ) -> dict[str, str]:
     """清除聊天历史
 
-    使用标准 FastAPI 依赖注入模式：
-    - agent: 通过依赖注入获取 LangGraphAgent 实例
+    使用 ChatStreamManager 删除持久化的聊天历史。
 
     Args:
         session_id: 会话 ID
-        agent: Agent 实例（依赖注入）
         tenant_id: 租户 ID（依赖注入）
         user_id: 用户 ID（依赖注入）
 
@@ -430,8 +403,15 @@ async def clear_chat_history(
         操作结果
     """
     try:
-        # 清除 agent 聊天历史（包括 PostgreSQL Checkpoint 和数据库消息）
-        await agent.clear_chat_history(session_id)
+        await _validate_session_access_dep(
+            session_id=session_id,
+            user_id=user_id,
+            tenant_id=tenant_id,
+        )
+
+        # 删除聊天历史
+        stream_manager = await get_chat_stream_manager()
+        await stream_manager.delete_chat_history(session_id)
 
         return {"status": "success", "message": "聊天历史已清除"}
 

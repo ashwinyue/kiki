@@ -42,8 +42,6 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 
-# ============== 事件类型定义 ==============
-
 class AuditEventType(str, Enum):
     """审计事件类型
 
@@ -93,15 +91,12 @@ class AuditEventType(str, Enum):
     CONFIG_CHANGED = "config:changed"
 
 
-# ============== 敏感数据脱敏 ==============
-
 class SensitiveDataMasker:
     """敏感数据脱敏器
 
     对审计日志中的敏感数据进行脱敏处理。
     """
 
-    # 敏感字段模式
     PATTERNS = {
         "api_key": r"""(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-]+)""",
         "token": r"""(?i)(token|access[_-]?token)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-\.]+)""",
@@ -140,7 +135,6 @@ class SensitiveDataMasker:
         for pattern_key in all_patterns:
             pattern = self.PATTERNS.get(pattern_key)
             if pattern:
-
                 def replace_match(m):
                     return f"{m.group(1)}{self.mask_char}"
 
@@ -165,7 +159,6 @@ class SensitiveDataMasker:
         result = {}
 
         for key, value in data.items():
-            # 检查是否是敏感字段
             if any(keyword in key.lower() for keyword in ["api", "key", "token", "secret", "password", "credit", "card", "email", "phone", "ip"]):
                 if isinstance(value, str):
                     value = self.mask(value)
@@ -179,8 +172,6 @@ class SensitiveDataMasker:
 
 _masker = SensitiveDataMasker()
 
-
-# ============== 审计事件数据类 ==============
 
 @dataclass
 class AuditEvent:
@@ -249,8 +240,6 @@ class AuditEvent:
         return json.dumps(self.to_dict(), ensure_ascii=False, default=str)
 
 
-# ============== 审计日志记录器 ==============
-
 class AuditLogger:
     """审计日志记录器
 
@@ -311,7 +300,6 @@ class AuditLogger:
 
         self._is_running = False
 
-        # 等待队列处理完毕
         while not self._queue.empty():
             await asyncio.sleep(0.1)
 
@@ -337,7 +325,6 @@ class AuditLogger:
         except TimeoutError:
             logger.warning("audit_queue_full")
 
-        # 控制台输出实时日志
         if self.enable_console:
             logger.info(
                 "audit_event",
@@ -375,11 +362,9 @@ class AuditLogger:
         Args:
             event: 审计事件
         """
-        # 文件存储
         if self.enable_file:
             await self._persist_to_file(event)
 
-        # 数据库存储
         if self.enable_db:
             await self._persist_to_db(event)
 
@@ -391,12 +376,10 @@ class AuditLogger:
         """
         import aiofiles
 
-        # 确保目录存在
         log_dir = "logs/audit"
         try:
             os.makedirs(log_dir, exist_ok=True)
 
-            # 按日期分文件
             date_str = event.timestamp.strftime("%Y-%m-%d")
             log_file = f"{log_dir}/audit_{date_str}.logl"
 
@@ -425,8 +408,6 @@ class AuditLogger:
         return self._is_running
 
 
-# ============== 全局审计日志记录器 =============
-
 _global_audit_logger: AuditLogger | None = None
 
 
@@ -439,7 +420,6 @@ def get_audit_logger() -> AuditLogger:
     global _global_audit_logger
 
     if _global_audit_logger is None:
-        # 从配置读取设置
         enable_audit = getattr(settings, "audit_enabled", False)
         enable_db = getattr(settings, "audit_db_enabled", False)
         enable_file = getattr(settings, "audit_file_enabled", False)
@@ -469,8 +449,6 @@ async def ensure_audit_logger_started() -> AuditLogger:
 
     return logger
 
-
-# ============== 便捷函数 ==============
 
 async def record_event(
     event_type: AuditEventType,
@@ -608,7 +586,6 @@ async def record_tool_call(
     }
 
     if tool_output is not None:
-        # 限制输出大小
         output_str = str(tool_output)
         if len(output_str) > 1000:
             output_str = output_str[:1000] + "... (truncated)"
@@ -652,13 +629,10 @@ async def get_audit_logs(
         )
         ```
     """
-    # TODO: 从数据库查询
-    # 当前返回空列表
     logger.debug("get_audit_logs_called", user_id=user_id, limit=limit)
     return []
 
 
-# 装饰器
 def audit_event(
     event_type: AuditEventType | str,
     data: dict[str, Any] | None = None,
@@ -705,19 +679,15 @@ def audit_event(
 
 
 __all__ = [
-    # 数据类
     "AuditEvent",
     "AuditEventType",
     "SensitiveDataMasker",
-    # 记录器
     "AuditLogger",
     "get_audit_logger",
     "ensure_audit_logger_started",
-    # 便捷函数
     "record_event",
     "record_agent_event",
     "record_tool_call",
     "get_audit_logs",
-    # 装饰器
     "audit_event",
 ]

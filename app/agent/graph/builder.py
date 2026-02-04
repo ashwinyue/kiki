@@ -87,8 +87,7 @@ def build_chat_graph(
         )
     )
 
-    # 添加 tools 节点（将在编译时设置）
-    builder.add_node("tools", lambda state, config: None)  # 占位符
+    builder.add_node("tools", lambda state, config: None)
 
     builder.add_edge(START, "chat")
 
@@ -98,7 +97,6 @@ def build_chat_graph(
         lambda state: "tools" if _has_tool_calls(state) else END,
     )
 
-    # 工具执行后返回聊天节点
     builder.add_edge("tools", "chat")
 
     logger.debug("chat_graph_structure_built")
@@ -146,14 +144,11 @@ async def compile_chat_graph(
     llm_service = llm_service or get_llm_service()
     system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
 
-    # 构建图
     builder = build_chat_graph(llm_service, system_prompt, max_iterations)
 
-    # 创建工具节点并替换
     tool_node = await create_tool_node(tenant_id)
     builder.add_node("tools", tool_node)
 
-    # 获取 checkpointer
     if checkpointer is None:
         checkpointer = await get_checkpointer(use_postgres=use_postgres_checkpointer)
         logger.debug(
@@ -161,7 +156,6 @@ async def compile_chat_graph(
             type=type(checkpointer).__name__,
         )
 
-    # 编译图
     graph = builder.compile(checkpointer=checkpointer)
 
     logger.info(

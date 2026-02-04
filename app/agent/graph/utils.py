@@ -93,19 +93,15 @@ def has_tool_calls(state: dict[str, Any]) -> bool:
 def should_continue(state: dict[str, Any]) -> bool:
     """判断是否应该继续执行
 
-    检查迭代次数和错误状态。
-
     Args:
         state: 状态字典
 
     Returns:
         是否应该继续
     """
-    # 检查错误
     if state.get("error"):
         return False
 
-    # 检查迭代次数
     iteration_count = state.get("iteration_count", 0)
     max_iterations = state.get("max_iterations", 10)
 

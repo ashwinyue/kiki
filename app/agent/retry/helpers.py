@@ -1,24 +1,6 @@
 """重试工具函数模块
 
 提供重试相关的工具函数。
-
-使用示例:
-```python
-from app.agent.retry.helpers import execute_with_retry, create_retryable_node
-
-# 执行带重试的函数
-result = await execute_with_retry(
-    llm.ainvoke,
-    messages,
-    policy=RetryPolicy(max_attempts=3)
-)
-
-# 创建可重试的节点
-retryable_node = create_retryable_node(
-    my_node,
-    policy=RetryPolicy(max_attempts=3)
-)
-```
 """
 
 import asyncio

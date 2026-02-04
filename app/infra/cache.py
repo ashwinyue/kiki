@@ -537,9 +537,6 @@ class CachePenetrationProtection:
         return result
 
 
-# ============== 缓存装饰器 ==============
-
-
 def cached(
     ttl: int = 300,
     key_prefix: str = "",
@@ -670,8 +667,6 @@ def generate_cache_key(
     return hashlib.md5(key_str.encode()).hexdigest()
 
 
-# ============== 全局缓存实例 ==============
-
 cache_instance = RedisCache(
     redis_url=str(settings.redis_url),
     default_ttl=300,
@@ -691,9 +686,6 @@ async def get_cache() -> RedisCache:
     if cache_instance.redis is None:
         await cache_instance.connect()
     return cache_instance
-
-
-# ============== 预热函数 ==============
 
 
 async def warmup_cache(
@@ -716,9 +708,6 @@ async def warmup_cache(
 
     logger.info("cache_warmed_up", count=count, ttl=ttl)
     return count
-
-
-# ============== 多层缓存（L1 内存 + L2 Redis）=============
 
 
 class CacheStats:
@@ -1105,9 +1094,6 @@ def get_multilayer_cache() -> MultiLayerCache:
     return _multilayer_cache
 
 
-# ============== LLM 语义缓存 ==============
-
-
 class SemanticCache:
     """语义缓存
 
@@ -1277,9 +1263,6 @@ def get_semantic_cache() -> SemanticCache:
     if _semantic_cache is None:
         _semantic_cache = SemanticCache()
     return _semantic_cache
-
-
-# ============== 租户隔离缓存 ==============
 
 
 class TenantCache:

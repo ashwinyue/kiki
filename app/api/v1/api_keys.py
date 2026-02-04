@@ -21,7 +21,7 @@ from app.models.api_key import (
 )
 from app.observability.logging import get_logger
 from app.rate_limit.limiter import RateLimit, limiter
-from app.services.api_key_management_service import (
+from app.services.agent.api_key_management_service import (
     ApiKeyManagementService,
     get_api_key_management_service,
 )
