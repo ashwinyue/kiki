@@ -337,7 +337,7 @@ async def chat_stream(
 @limiter.limit(RateLimit.API)
 async def get_chat_history(
     session_id: str,
-    http_request: StarletteRequest,
+    request: StarletteRequest,
     tenant_id: TenantIdDep = None,
     user_id: UserIdDep = None,
 ) -> ChatHistoryResponse:
@@ -387,6 +387,7 @@ async def get_chat_history(
 @limiter.limit(RateLimit.API)
 async def clear_chat_history(
     session_id: str,
+    request: StarletteRequest,
     tenant_id: TenantIdDep = None,
     user_id: UserIdDep = None,
 ) -> dict[str, str]:
